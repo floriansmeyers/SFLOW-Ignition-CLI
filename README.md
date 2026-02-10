@@ -2,12 +2,6 @@
 
 CLI tool for the Ignition SCADA 8.3+ REST API.
 
-## Installation
-
-```bash
-pip install ignition-cli
-```
-
 ## Quick Start
 
 ```bash
