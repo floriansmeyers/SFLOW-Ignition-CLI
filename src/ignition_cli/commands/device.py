@@ -134,11 +134,12 @@ def restart(
 
         # Disable
         body = {**data, "enabled": False}
-        client.put(f"/resources/{module}/{device_type}", json=body)
+        client.put(f"/resources/{module}/{device_type}", json=[body])
         console.print(f"[dim]Disabled '{name}'...[/]")
         time.sleep(1)
 
-        # Re-enable
-        body["enabled"] = True
-        client.put(f"/resources/{module}/{device_type}", json=body)
+        # Re-fetch to get updated signature, then re-enable
+        data = client.get_json(f"/resources/find/{module}/{device_type}/{name}")
+        body = {**data, "enabled": True}
+        client.put(f"/resources/{module}/{device_type}", json=[body])
         console.print(f"[green]Device '{name}' restarted (toggled enabled state).[/]")

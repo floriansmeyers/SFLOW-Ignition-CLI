@@ -10,6 +10,20 @@ from ignition_cli.config.manager import ConfigManager
 from ignition_cli.config.models import GatewayProfile
 
 
+def pytest_addoption(parser):
+    parser.addoption("--gateway-url", action="store", default=None)
+    parser.addoption("--gateway-token", action="store", default=None)
+
+
+@pytest.fixture
+def gw_opts(request):
+    url = request.config.getoption("--gateway-url")
+    token = request.config.getoption("--gateway-token")
+    if not url or not token:
+        pytest.skip("Live gateway credentials not provided")
+    return ["--url", url, "--token", token]
+
+
 @pytest.fixture
 def tmp_config(tmp_path: Path) -> Path:
     """Return a temporary config file path."""

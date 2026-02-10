@@ -136,9 +136,15 @@ def export_project(
     token: TokenOpt = None,
 ) -> None:
     """Export a project as a .zip file."""
+    dest = Path(output_file) if output_file else Path(f"{name}.zip")
+    if dest.is_dir():
+        console.print(f"[red]Output path is a directory: {dest}[/]")
+        raise typer.Exit(1)
+    if not dest.parent.exists():
+        console.print(f"[red]Directory does not exist: {dest.parent}[/]")
+        raise typer.Exit(1)
     with make_client(gateway, url, token) as client:
         resp = client.get(f"/projects/export/{name}")
-        dest = Path(output_file) if output_file else Path(f"{name}.zip")
         dest.write_bytes(resp.content)
         size = len(resp.content)
         console.print(
@@ -197,8 +203,8 @@ def copy(
         client.post(
             "/projects/copy",
             json={
-                "projectName": name,
-                "newProjectName": new_name,
+                "fromName": name,
+                "toName": new_name,
             },
         )
         console.print(f"[green]Project '{name}' copied to '{new_name}'.[/]")
@@ -215,7 +221,7 @@ def rename(
 ) -> None:
     """Rename a project."""
     with make_client(gateway, url, token) as client:
-        client.post(f"/projects/rename/{name}", json={"newProjectName": new_name})
+        client.post(f"/projects/rename/{name}", json={"name": new_name})
         console.print(f"[green]Project '{name}' renamed to '{new_name}'.[/]")
 
 

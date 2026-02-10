@@ -14,6 +14,7 @@ from ignition_cli.client.errors import (
     ConflictError,
     GatewayAPIError,
     GatewayConnectionError,
+    IgnitionCLIError,
     NotFoundError,
 )
 from ignition_cli.config.constants import DEFAULT_API_BASE, DEFAULT_MAX_RETRIES
@@ -72,6 +73,10 @@ class GatewayClient:
         except httpx.TimeoutException as exc:
             raise GatewayConnectionError(
                 f"Request to {self.profile.url} timed out: {exc}"
+            ) from exc
+        except (httpx.InvalidURL, httpx.UnsupportedProtocol) as exc:
+            raise GatewayConnectionError(
+                f"Invalid URL for gateway at {self.profile.url}: {exc}"
             ) from exc
         return self._handle_response(response)
 
@@ -143,6 +148,14 @@ class GatewayClient:
             raise GatewayConnectionError(
                 f"Request to {self.profile.url} timed out: {exc}"
             ) from exc
+        except (httpx.InvalidURL, httpx.UnsupportedProtocol) as exc:
+            raise GatewayConnectionError(
+                f"Invalid URL for gateway at {self.profile.url}: {exc}"
+            ) from exc
+        except OSError as exc:
+            raise IgnitionCLIError(
+                f"Cannot write to {dest}: {exc}"
+            ) from exc
 
     def get_openapi_spec(self) -> dict:
         """Fetch the OpenAPI spec from the gateway root URL (with auth)."""
@@ -156,5 +169,9 @@ class GatewayClient:
         except httpx.TimeoutException as exc:
             raise GatewayConnectionError(
                 f"Request to {self.profile.url} timed out: {exc}"
+            ) from exc
+        except (httpx.InvalidURL, httpx.UnsupportedProtocol) as exc:
+            raise GatewayConnectionError(
+                f"Invalid URL for gateway at {self.profile.url}: {exc}"
             ) from exc
         return self._handle_response(response).json()
