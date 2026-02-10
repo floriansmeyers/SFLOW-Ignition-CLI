@@ -1,0 +1,74 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ignition-cli"
+version = "0.1.0"
+description = "CLI tool for Ignition SCADA 8.3+ REST API"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "SFLOW" },
+]
+keywords = ["ignition", "scada", "cli", "automation", "ics"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Systems Administration",
+]
+dependencies = [
+    "typer[all]>=0.12.0",
+    "httpx>=0.27.0",
+    "pydantic>=2.0",
+    "tomli-w>=1.0",
+    "pyyaml>=6.0",
+    "platformdirs>=4.0",
+]
+
+[project.optional-dependencies]
+watch = ["watchfiles>=0.21"]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "respx>=0.21",
+    "ruff>=0.4",
+    "mypy>=1.10",
+]
+
+[project.scripts]
+ignition-cli = "ignition_cli.app:main"
+
+[project.urls]
+Homepage = "https://github.com/SFLOW-Ignition-CLI/ignition-cli"
+Repository = "https://github.com/SFLOW-Ignition-CLI/ignition-cli"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ignition_cli"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "e2e: end-to-end tests requiring a live gateway",
+]
+
+[tool.ruff]
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+packages = ["ignition_cli"]
+mypy_path = "src"

@@ -1,0 +1,232 @@
+# Plan: `ignition-cli` — CLI for Ignition SCADA 8.3+
+
+## Context
+
+The Ignition SCADA platform by Inductive Automation introduced a comprehensive REST API in version 8.3 (OpenAPI spec at `/openapi.json`), but **no official CLI tool exists** for common operations. Gateway management, project deployment, tag configuration, and development workflows all require the web UI or manual API calls. This project fills that gap with an open-source Python CLI.
+
+**Existing landscape:**
+- `ignition-mcp` (WhiskeyHouse) — MCP bridge for AI assistants, not a developer CLI
+- `ignition-tag-cicd-module` — Java module for tag version control, requires install on gateway
+- `gwcmd` — Official but limited to gateway-level backups only
+- **No comprehensive CLI exists** — clear ecosystem gap
+
+---
+
+## Key Decisions
+
+| Decision | Choice |
+|---|---|
+| Name | `ignition-cli` |
+| Language | Python 3.10+ |
+| CLI framework | Typer (type-hint based, Rich integration) |
+| HTTP client | httpx (async + sync) |
+| Data models | Pydantic v2 |
+| Config format | TOML (`~/.ignition-cli/config.toml` via `platformdirs`) |
+| API approach | **Hybrid** — static commands for core UX + generic `api` subcommand for raw access |
+| Target | Ignition 8.3+ REST API |
+| Distribution | PyPI, open source (MIT) |
+| Repository | New standalone repo |
+
+---
+
+## Project Structure
+
+```
+ignition-cli/
+├── src/ignition_cli/
+│   ├── __init__.py              # __version__
+│   ├── __main__.py              # python -m entry point
+│   ├── app.py                   # Root Typer app, global options callback
+│   ├── client/
+│   │   ├── gateway.py           # GatewayClient (httpx sync/async)
+│   │   ├── auth.py              # APITokenAuth, BasicAuth strategies
+│   │   ├── openapi.py           # OpenAPI spec fetcher & parser
+│   │   └── errors.py            # Typed exceptions, @error_handler decorator
+│   ├── config/
+│   │   ├── manager.py           # Config read/write, profile resolution
+│   │   ├── models.py            # GatewayProfile, CLIConfig (Pydantic)
+│   │   └── constants.py         # Default paths, env var names
+│   ├── commands/
+│   │   ├── config_cmd.py        # ignition-cli config (profiles)
+│   │   ├── gateway.py           # ignition-cli gateway (status, backup, logs, modules)
+│   │   ├── project.py           # ignition-cli project (list, export, import, diff, watch)
+│   │   ├── tag.py               # ignition-cli tag (browse, read, write, export, import)
+│   │   ├── device.py            # ignition-cli device (list, status)
+│   │   ├── resource.py          # ignition-cli resource (generic CRUD)
+│   │   └── api.py               # ignition-cli api (raw get/post/put/delete, discover)
+│   ├── models/
+│   │   ├── gateway.py           # GatewayInfo, Module, LogEntry
+│   │   ├── project.py           # ProjectSummary, ProjectResource
+│   │   ├── tag.py               # TagNode, TagValue, TagProvider
+│   │   ├── device.py            # DeviceConnection
+│   │   ├── resource.py          # Resource, ResourceType
+│   │   └── common.py            # ErrorResponse, PaginatedResponse
+│   ├── output/
+│   │   ├── formatter.py         # Output dispatcher (table/json/yaml/csv)
+│   │   └── tables.py            # Rich table rendering helpers
+│   └── utils/
+│       ├── file_watcher.py      # watchfiles-based watcher for project watch
+│       ├── diff.py              # Project diff utilities
+│       └── git.py               # Git integration helpers
+├── tests/
+│   ├── conftest.py              # Shared fixtures, mock gateway
+│   ├── fixtures/                # Sample API responses, exports
+│   ├── unit/                    # Client, config, models, formatter tests
+│   ├── integration/             # Full command tests with mocked HTTP
+│   └── e2e/                     # Live gateway tests (skipped by default)
+├── pyproject.toml               # Hatchling build, dependencies, entry points
+├── README.md
+├── LICENSE                      # MIT
+├── CHANGELOG.md
+└── .github/workflows/ci.yml    # Lint, type-check, test (Python 3.10-3.13)
+```
+
+---
+
+## Command Tree
+
+```
+ignition-cli [--gateway/-g NAME] [--url URL] [--token TOKEN]
+             [--format/-f table|json|yaml|csv] [--verbose/-v] [--quiet/-q]
+
+  config init                          Interactive setup wizard
+  config add <name> --url --token      Add gateway profile
+  config list                          List profiles
+  config show <name>                   Show profile details
+  config set-default <name>            Set default profile
+  config test [name]                   Test connectivity
+  config remove <name>                 Remove profile
+
+  gateway status [--watch --interval]  Gateway status & system info
+  gateway info                         Version, edition, OS details
+  gateway backup [-o FILE]             Download .gwbk backup
+  gateway restore <file>               Restore backup
+  gateway modules [--status]           List installed modules
+  gateway logs [-n LINES] [--level] [--follow]  View/tail logs
+
+  project list [--filter]              List projects
+  project show <name>                  Project details
+  project create <name>                Create project
+  project delete <name>                Delete project
+  project export <name> [-o FILE]      Export as .zip
+  project import <file>                Import from file
+  project diff <name> -t TARGET_GW    Diff between gateways
+  project watch <name> <path>          Watch & sync local files
+  project resources <name>             List project resources
+
+  tag browse [path] [--recursive]      Browse tag tree
+  tag read <paths...>                  Read tag values
+  tag write <path> <value>             Write a tag value
+  tag export [path] [-o FILE]          Export tag config JSON
+  tag import <file> [--merge|--replace]  Import tag config
+  tag providers                        List tag providers
+
+  device list [--status]               List device connections
+  device show <name>                   Device details
+  device status <name>                 Live device status
+  device restart <name>                Restart connection
+
+  resource list <type>                 List resources by type
+  resource show <type> <name>          Show resource config
+  resource create <type> --name -c     Create resource
+  resource update <type> <name> -c     Update resource
+  resource delete <type> <name>        Delete resource
+  resource types                       List all types from OpenAPI
+
+  api get|post|put|delete <path>       Raw API requests
+  api discover [--filter --method]     Browse endpoints from OpenAPI
+  api spec [-o FILE]                   Download OpenAPI JSON
+```
+
+---
+
+## Core Architecture
+
+### Gateway Client (`client/gateway.py`)
+- `httpx.Client` for sync commands (most CLI use cases)
+- `httpx.AsyncClient` for streaming (log follow, project watch)
+- API base: `{gateway_url}/data/api/v1/`
+- Auth via `X-Ignition-API-Token` header (primary) or HTTP Basic (fallback)
+- Automatic retry with backoff for 502/503/504
+- Returns typed Pydantic models
+
+### Config Resolution (precedence)
+1. CLI flags (`--url`, `--token`)
+2. Environment variables (`IGNITION_API_TOKEN`, `IGNITION_GATEWAY_URL`)
+3. Config profile (`~/.ignition-cli/config.toml`)
+
+### Hybrid API Approach
+- **Static commands** (gateway, project, tag, device) — crafted UX with Pydantic models, progress bars, tree views, colored diffs
+- **`resource` commands** — structured CRUD for any `/data/api/v1/resources/{type}/{name}` endpoint
+- **`api` commands** — raw HTTP access to any endpoint + OpenAPI-powered `discover` for browsing
+
+### Error Handling
+- `@error_handler` decorator on all commands
+- Typed exceptions: `AuthenticationError`, `NotFoundError`, `ConflictError`, `GatewayConnectionError`
+- User-friendly Rich-formatted error messages
+
+---
+
+## Dependencies
+
+```
+typer[all]>=0.12.0       # CLI framework (includes rich, shellingham)
+httpx>=0.27.0            # HTTP client
+pydantic>=2.0            # Data validation
+tomli-w>=1.0             # TOML writer
+pyyaml>=6.0              # YAML output
+platformdirs>=4.0        # Cross-platform config paths
+```
+
+Optional: `watchfiles>=0.21` (for `project watch`), `mkdocs-material` (docs)
+
+---
+
+## Phased Implementation
+
+### Phase 1 — Foundation (MVP)
+1. Create repo, `pyproject.toml` (hatchling), CI workflow
+2. Implement `config/` — models, manager, TOML read/write
+3. Implement `client/` — GatewayClient, auth, errors
+4. Implement `output/formatter.py` — table + JSON output
+5. Implement `config` commands (init, add, list, show, test, remove, set-default)
+6. Implement `gateway status` and `gateway info`
+7. Implement `api get/post/put/delete` raw commands
+8. Unit + integration tests for above
+9. **Deliverable:** Connect to gateway, manage profiles, query status, raw API access
+
+### Phase 2 — Project & Gateway Management
+1. Implement `project` commands (list, show, create, delete, export, import)
+2. Implement `gateway backup/restore/modules/module-detail`
+3. Add YAML output format
+4. Full test coverage
+
+### Phase 3 — Tags, Devices, Resources
+1. Implement `tag` commands (browse with tree rendering, read, write, export, import)
+2. Implement `device` commands (list, show, status, restart)
+3. Implement `resource` commands (list, show, create, update, delete, types)
+4. Add CSV output format
+
+### Phase 4 — Developer Workflows
+1. Implement `project diff` (colored unified diff between gateways)
+2. Implement `project watch` (watchfiles-based sync)
+3. Implement `api discover` + `api spec` (OpenAPI parsing)
+4. Implement `gateway logs` with `--follow` streaming
+5. E2E test suite
+
+### Phase 5 — Polish & Release
+1. MkDocs documentation
+2. Shell completion support
+3. Lazy imports for fast CLI startup
+4. Error message review
+5. PyPI release as `ignition-cli 0.1.0`
+
+---
+
+## Verification
+
+1. **Unit tests:** `pytest tests/unit/ --cov=ignition_cli` — target 90%+ coverage
+2. **Integration tests:** `pytest tests/integration/` — Typer CliRunner + respx HTTP mocking
+3. **Manual testing:** `ignition-cli config add dev --url https://gw:8043 --token test:key && ignition-cli gateway status`
+4. **E2E (optional):** `IGNITION_TEST_URL=... IGNITION_TEST_TOKEN=... pytest -m e2e`
+5. **Lint/type check:** `ruff check src/ tests/ && mypy src/`

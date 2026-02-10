@@ -1,0 +1,65 @@
+"""Shared test fixtures."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Generator
+
+import pytest
+
+from ignition_cli.config.manager import ConfigManager
+from ignition_cli.config.models import GatewayProfile
+
+
+@pytest.fixture
+def tmp_config(tmp_path: Path) -> Path:
+    """Return a temporary config file path."""
+    return tmp_path / "config.toml"
+
+
+@pytest.fixture
+def config_manager(tmp_config: Path) -> ConfigManager:
+    """Return a ConfigManager pointed at a temp config file."""
+    return ConfigManager(config_path=tmp_config)
+
+
+@pytest.fixture
+def sample_profile() -> GatewayProfile:
+    """Return a sample gateway profile for testing."""
+    return GatewayProfile(
+        name="test-gw",
+        url="https://localhost:8043",
+        token="testkey:testsecret",
+    )
+
+
+@pytest.fixture
+def mock_gateway_status() -> dict:
+    """Sample gateway status response."""
+    return {
+        "state": "RUNNING",
+        "edition": "standard",
+        "version": "8.3.0",
+    }
+
+
+@pytest.fixture
+def mock_gateway_info() -> dict:
+    """Sample gateway info response."""
+    return {
+        "name": "Test Gateway",
+        "version": "8.3.0",
+        "edition": "standard",
+        "state": "RUNNING",
+        "platform_os": "Linux",
+        "java_version": "17.0.9",
+    }
+
+
+@pytest.fixture
+def mock_modules() -> list[dict]:
+    """Sample modules list."""
+    return [
+        {"name": "Perspective", "id": "com.inductiveautomation.perspective", "version": "2.0.0", "state": "RUNNING"},
+        {"name": "Vision", "id": "com.inductiveautomation.vision", "version": "5.0.0", "state": "RUNNING"},
+    ]
