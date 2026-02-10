@@ -15,6 +15,7 @@ class GatewayInfo(BaseModel):
     platform_os: str | None = None
     java_version: str | None = None
     uptime: int | None = None
+    deploymentMode: str | None = None
 
 
 class GatewayStatus(BaseModel):

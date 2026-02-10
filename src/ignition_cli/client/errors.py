@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import functools
-import sys
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from rich.console import Console
 
@@ -43,6 +43,12 @@ class ConflictError(IgnitionCLIError):
     exit_code = 5
 
 
+class ConfigurationError(IgnitionCLIError):
+    """Missing or invalid CLI configuration."""
+
+    exit_code = 6
+
+
 class GatewayAPIError(IgnitionCLIError):
     """Generic API error from the gateway."""
 
@@ -60,9 +66,6 @@ def error_handler(func: F) -> F:
             return func(*args, **kwargs)
         except IgnitionCLIError as exc:
             err_console.print(f"[bold red]Error:[/] {exc}")
-            raise SystemExit(exc.exit_code)
-        except ValueError as exc:
-            err_console.print(f"[bold red]Error:[/] {exc}")
-            raise SystemExit(1)
+            raise SystemExit(exc.exit_code) from exc
 
     return wrapper  # type: ignore[return-value]

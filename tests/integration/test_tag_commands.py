@@ -48,6 +48,7 @@ class TestTagCommands:
         result = runner.invoke(app, ["tag", "read", "Tag1", "--url", GW, "--token", "k:s"])
         assert result.exit_code == 0
         assert "42" in result.output
+        assert "Warning" in result.output
 
     @respx.mock
     def test_write(self):
@@ -57,6 +58,7 @@ class TestTagCommands:
         result = runner.invoke(app, ["tag", "write", "Tag1", "100", "--url", GW, "--token", "k:s"])
         assert result.exit_code == 0
         assert "Wrote" in result.output
+        assert "Warning" in result.output
 
     @respx.mock
     def test_export(self):

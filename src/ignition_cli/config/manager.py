@@ -7,6 +7,7 @@ from pathlib import Path
 
 import tomli_w
 
+from ignition_cli.client.errors import ConfigurationError
 from ignition_cli.config.constants import CONFIG_DIR, CONFIG_FILE, ENV_API_TOKEN, ENV_GATEWAY_PROFILE, ENV_GATEWAY_URL
 from ignition_cli.config.models import CLIConfig, GatewayProfile
 
@@ -45,6 +46,8 @@ class ConfigManager:
 
     def save(self) -> None:
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
+        # Secure directory permissions (owner-only)
+        os.chmod(self.config_path.parent, 0o700)
         data: dict = {}
         if self.config.default_profile:
             data["default_profile"] = self.config.default_profile
@@ -61,6 +64,8 @@ class ConfigManager:
                     del prof_dict["timeout"]
                 data["profiles"][name] = prof_dict
         self.config_path.write_bytes(tomli_w.dumps(data).encode())
+        # Secure file permissions (owner read/write only)
+        os.chmod(self.config_path, 0o600)
 
     def add_profile(self, profile: GatewayProfile) -> None:
         self.config.profiles[profile.name] = profile
@@ -110,7 +115,7 @@ class ConfigManager:
         resolved_token = token or env_token or (profile.token if profile else None)
 
         if not resolved_url:
-            raise ValueError(
+            raise ConfigurationError(
                 "No gateway URL configured. Use 'ignition-cli config add' or set "
                 f"{ENV_GATEWAY_URL} or pass --url."
             )

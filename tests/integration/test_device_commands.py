@@ -51,15 +51,26 @@ class TestDeviceCommands:
         assert "PLC1" in result.output
 
     @respx.mock
-    def test_device_status(self):
+    def test_device_status_deprecated(self):
+        """device status is deprecated — delegates to show."""
         respx.get(f"{BASE}/{DEVICE_FIND}/PLC1").mock(
             return_value=httpx.Response(200, json={"name": "PLC1", "state": "Connected"})
         )
         result = runner.invoke(app, ["device", "status", "PLC1", "--url", GW, "--token", "k:s"])
         assert result.exit_code == 0
-        assert "Connected" in result.output
+        assert "PLC1" in result.output
 
-    def test_restart_shows_note(self):
+    @respx.mock
+    def test_restart_toggles_enabled(self):
+        """device restart fetches resource, disables, then re-enables."""
+        device_data = {"name": "PLC1", "type": "Modbus TCP", "enabled": True}
+        respx.get(f"{BASE}/{DEVICE_FIND}/PLC1").mock(
+            return_value=httpx.Response(200, json=device_data)
+        )
+        put_route = respx.put(f"{BASE}/resources/com.inductiveautomation.opcua/device").mock(
+            return_value=httpx.Response(200, json={"status": "ok"})
+        )
         result = runner.invoke(app, ["device", "restart", "PLC1", "--url", GW, "--token", "k:s"])
         assert result.exit_code == 0
-        assert "does not have a direct device restart endpoint" in result.output
+        assert "restarted" in result.output.lower()
+        assert put_route.call_count == 2

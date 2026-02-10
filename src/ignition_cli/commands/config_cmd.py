@@ -116,7 +116,8 @@ def show(
     data = profile.model_dump(exclude_none=True)
     # Mask token for display
     if "token" in data:
-        data["token"] = data["token"][:8] + "..." if len(data["token"]) > 8 else "***"
+        token = data["token"]
+        data["token"] = token[:4] + "..." + token[-2:] if len(token) > 6 else "***"
     if "password" in data:
         data["password"] = "***"
 
@@ -150,8 +151,7 @@ def test(
     console.print(f"Testing connection to [bold]{profile.url}[/]...")
 
     with GatewayClient(profile) as client:
-        resp = client.get("/status/info")
-        info = resp.json()
+        info = client.get_json("/gateway-info")
         console.print(f"[green]Connected![/] Gateway: {info.get('name', 'Unknown')} v{info.get('version', '?')}")
 
 

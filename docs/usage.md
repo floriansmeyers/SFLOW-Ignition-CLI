@@ -15,11 +15,12 @@ Complete reference for the `ignition-cli` command-line tool for Ignition SCADA 8
 7. [Command Reference](#7-command-reference)
    - [Common Options](#common-options)
    - [config](#config) (7 commands)
-   - [gateway](#gateway) (6 commands)
-   - [project](#project) (9 commands)
+   - [gateway](#gateway) (11 commands)
+   - [project](#project) (11 commands)
    - [tag](#tag) (6 commands)
-   - [device](#device) (4 commands)
-   - [resource](#resource) (7 commands)
+   - [device](#device) (3 commands)
+   - [resource](#resource) (9 commands)
+   - [mode](#mode) (5 commands)
    - [api](#api) (6 commands)
 8. [Common Workflows](#8-common-workflows)
 9. [Troubleshooting](#9-troubleshooting)
@@ -40,10 +41,13 @@ Complete reference for the `ignition-cli` command-line tool for Ignition SCADA 8
 
 - Manage multiple gateway connections through named profiles
 - View gateway status, version info, modules, and logs
+- Trigger project and config scans without gateway restart
 - Create, export, import, delete, and diff Ignition projects
 - Browse, read, write, export, and import tags
 - List and inspect OPC-UA device connections
 - Generic CRUD operations on any gateway resource type
+- Upload and download binary datafiles (fonts, themes, icons, drivers)
+- Manage deployment modes (dev/staging/prod)
 - Raw API access to arbitrary gateway endpoints
 - Discover available API endpoints from the gateway's OpenAPI spec
 - Output in table, JSON, YAML, or CSV format
@@ -769,6 +773,139 @@ ignition-cli gateway logs -f json | jq '.[] | select(.level == "ERROR")'
 
 ---
 
+#### gateway log-download
+
+Download the gateway log file as a zip archive.
+
+```bash
+ignition-cli gateway log-download [--output <path>] [--gateway <profile>] [--url <url>] [--token <token>]
+```
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--output` | `-o` | Output file path (default: `gateway-logs.zip`) |
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+
+**Example:**
+
+```bash
+ignition-cli gateway log-download
+ignition-cli gateway log-download -o logs/gateway-2025-01-15.zip
+```
+
+---
+
+#### gateway loggers
+
+List configured loggers and their levels.
+
+```bash
+ignition-cli gateway loggers [--gateway <profile>] [--url <url>] [--token <token>] [--format <fmt>]
+```
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+| `--format` | `-f` | Output format (default: `table`) |
+
+**Example:**
+
+```bash
+ignition-cli gateway loggers
+ignition-cli gateway loggers -f json
+```
+
+---
+
+#### gateway entity-browse
+
+Browse the gateway entity tree (configuration, health, metrics).
+
+```bash
+ignition-cli gateway entity-browse [--path <path>] [--depth <n>] [--gateway <profile>] [--url <url>] [--token <token>] [--format <fmt>]
+```
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--path` | `-p` | Entity path to browse (optional; browses root if omitted) |
+| `--depth` | `-d` | Browse depth (default: `1`) |
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+| `--format` | `-f` | Output format (default: `table`) |
+
+**Example:**
+
+```bash
+# Browse root
+ignition-cli gateway entity-browse
+
+# Browse a specific path with depth
+ignition-cli gateway entity-browse --path /config/databases --depth 2
+```
+
+---
+
+#### gateway scan-projects
+
+Trigger the gateway to scan for project changes. This causes the gateway to pick up project file modifications without a restart.
+
+```bash
+ignition-cli gateway scan-projects [--gateway <profile>] [--url <url>] [--token <token>]
+```
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+
+**Example:**
+
+```bash
+ignition-cli gateway scan-projects
+# Project scan triggered.
+```
+
+---
+
+#### gateway scan-config
+
+Trigger the gateway to scan for configuration changes. This causes the gateway to pick up resource/config file modifications without a restart.
+
+```bash
+ignition-cli gateway scan-config [--gateway <profile>] [--url <url>] [--token <token>]
+```
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+
+**Example:**
+
+```bash
+ignition-cli gateway scan-config
+# Config scan triggered.
+```
+
+---
+
 ### project
 
 Manage Ignition projects.
@@ -970,6 +1107,70 @@ ignition-cli project import MyApp.zip
 # Project 'MyApp' imported from MyApp.zip.
 
 ignition-cli project import MyApp.zip --name MyApp-Restored --overwrite
+```
+
+---
+
+#### project copy
+
+Copy a project to a new name on the same gateway.
+
+```bash
+ignition-cli project copy <name> --name <new_name> [--gateway <profile>] [--url <url>] [--token <token>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `name` | Source project name |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--name` | `-n` | New project name (required) |
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+
+**Example:**
+
+```bash
+ignition-cli project copy MyApp --name MyApp-Backup
+# Project 'MyApp' copied to 'MyApp-Backup'.
+```
+
+---
+
+#### project rename
+
+Rename a project on the gateway.
+
+```bash
+ignition-cli project rename <name> --name <new_name> [--gateway <profile>] [--url <url>] [--token <token>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `name` | Current project name |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--name` | `-n` | New project name (required) |
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+
+**Example:**
+
+```bash
+ignition-cli project rename OldProject --name NewProject
+# Project 'OldProject' renamed to 'NewProject'.
 ```
 
 ---
@@ -1255,39 +1456,45 @@ ignition-cli tag export --provider "HistoricalProvider" -o historical.json
 
 #### tag import
 
-Import tag configuration from a JSON file.
+Import tag configuration from a file (JSON, XML, or CSV).
 
 ```bash
-ignition-cli tag import <file> [--mode <mode>] [--provider <name>] [--gateway <profile>] [--url <url>] [--token <token>]
+ignition-cli tag import <file> [--collision-policy <policy>] [--path <path>] [--provider <name>] [--gateway <profile>] [--url <url>] [--token <token>]
 ```
 
 **Arguments:**
 
 | Argument | Description |
 |---|---|
-| `file` | Path to the JSON file to import |
+| `file` | Path to the tag file to import (JSON, XML, or CSV) |
 
 **Options:**
 
 | Option | Short | Description |
 |---|---|---|
-| `--mode` | `-m` | Import mode: `merge` (default) or `replace` |
+| `--collision-policy` | `-c` | Collision policy: `Abort`, `Overwrite`, `Rename`, `Ignore`, `MergeOverwrite` (default: `MergeOverwrite`) |
+| `--path` | | Target path for import |
 | `--provider` | `-p` | Tag provider name (default: `default`) |
 | `--gateway` | `-g` | Gateway profile |
 | `--url` | | Gateway URL override |
 | `--token` | | API token override |
 
+The file type is auto-detected from the file extension (`.json`, `.xml`, `.csv`).
+
 **Example:**
 
 ```bash
-# Merge import (default)
+# Import with default MergeOverwrite policy
 ignition-cli tag import tags-backup.json
 
-# Replace existing tags
-ignition-cli tag import tags-backup.json --mode replace
+# Import with Overwrite policy
+ignition-cli tag import tags-backup.json --collision-policy Overwrite
 
-# Specify provider
-ignition-cli tag import tags.json --provider "MyProvider"
+# Import to a specific path
+ignition-cli tag import station1-tags.json --path "Pumps/Station1"
+
+# Import XML tags to a specific provider
+ignition-cli tag import tags.xml --provider "MyProvider"
 ```
 
 ---
@@ -1324,7 +1531,7 @@ $ ignition-cli tag providers
 
 ### device
 
-Manage device connections. Devices are managed through the Ignition resource API under the `com.inductiveautomation.opcua` module.
+Manage device connections. Devices default to the `com.inductiveautomation.opcua` module but support `--module` and `--type` flags for other device types (Modbus, Allen-Bradley, etc.).
 
 ```
 ignition-cli device <command>
@@ -1332,10 +1539,10 @@ ignition-cli device <command>
 
 #### device list
 
-List OPC-UA device connections.
+List device connections.
 
 ```bash
-ignition-cli device list [--status <filter>] [--gateway <profile>] [--url <url>] [--token <token>] [--format <fmt>]
+ignition-cli device list [--status <filter>] [--module <mod>] [--type <type>] [--gateway <profile>] [--url <url>] [--token <token>] [--format <fmt>]
 ```
 
 **Options:**
@@ -1343,6 +1550,8 @@ ignition-cli device list [--status <filter>] [--gateway <profile>] [--url <url>]
 | Option | Short | Description |
 |---|---|---|
 | `--status` | | Filter by device status (case-insensitive substring match) |
+| `--module` | | Device module (default: `com.inductiveautomation.opcua`) |
+| `--type` | | Device type (default: `device`) |
 | `--gateway` | `-g` | Gateway profile |
 | `--url` | | Gateway URL override |
 | `--token` | | API token override |
@@ -1353,7 +1562,7 @@ ignition-cli device list [--status <filter>] [--gateway <profile>] [--url <url>]
 ```bash
 ignition-cli device list
 ignition-cli device list --status "connected"
-ignition-cli device list -f json
+ignition-cli device list --module com.inductiveautomation.modbus -f json
 ```
 
 ---
@@ -1363,7 +1572,7 @@ ignition-cli device list -f json
 Show details for a specific device connection.
 
 ```bash
-ignition-cli device show <name> [--gateway <profile>] [--url <url>] [--token <token>] [--format <fmt>]
+ignition-cli device show <name> [--module <mod>] [--type <type>] [--gateway <profile>] [--url <url>] [--token <token>] [--format <fmt>]
 ```
 
 **Arguments:**
@@ -1376,6 +1585,8 @@ ignition-cli device show <name> [--gateway <profile>] [--url <url>] [--token <to
 
 | Option | Short | Description |
 |---|---|---|
+| `--module` | | Device module (default: `com.inductiveautomation.opcua`) |
+| `--type` | | Device type (default: `device`) |
 | `--gateway` | `-g` | Gateway profile |
 | `--url` | | Gateway URL override |
 | `--token` | | API token override |
@@ -1390,45 +1601,12 @@ ignition-cli device show "PLC-Station1" -f json
 
 ---
 
-#### device status
-
-Show device configuration (retrieved via resource find). Functionally similar to `device show`.
-
-```bash
-ignition-cli device status <name> [--gateway <profile>] [--url <url>] [--token <token>] [--format <fmt>]
-```
-
-**Arguments:**
-
-| Argument | Description |
-|---|---|
-| `name` | Device name |
-
-**Options:**
-
-| Option | Short | Description |
-|---|---|---|
-| `--gateway` | `-g` | Gateway profile |
-| `--url` | | Gateway URL override |
-| `--token` | | API token override |
-| `--format` | `-f` | Output format (default: `table`) |
-
-**Example:**
-
-```bash
-ignition-cli device status "PLC-Station1"
-```
-
----
-
 #### device restart
 
-Restart a device connection by toggling its enabled state.
-
-> **Note:** The Ignition REST API does not have a direct device restart endpoint. This command prints a notice suggesting using the gateway web UI or `resource update` to toggle the device.
+Restart a device connection by toggling its enabled state (disable, wait, re-enable). Fetches the current resource, sets `enabled: false`, waits briefly, then sets `enabled: true`.
 
 ```bash
-ignition-cli device restart <name> [--gateway <profile>] [--url <url>] [--token <token>]
+ignition-cli device restart <name> [--module <mod>] [--type <type>] [--gateway <profile>] [--url <url>] [--token <token>]
 ```
 
 **Arguments:**
@@ -1441,6 +1619,8 @@ ignition-cli device restart <name> [--gateway <profile>] [--url <url>] [--token 
 
 | Option | Short | Description |
 |---|---|---|
+| `--module` | | Device module (default: `com.inductiveautomation.opcua`) |
+| `--type` | | Device type (default: `device`) |
 | `--gateway` | `-g` | Gateway profile |
 | `--url` | | Gateway URL override |
 | `--token` | | API token override |
@@ -1449,8 +1629,8 @@ ignition-cli device restart <name> [--gateway <profile>] [--url <url>] [--token 
 
 ```bash
 ignition-cli device restart "PLC-Station1"
-# Note: The Ignition REST API does not have a direct device restart endpoint.
-# Use the gateway web UI or the 'resource update' command to toggle the device.
+# Restarting device 'PLC-Station1'...
+# Device 'PLC-Station1' restarted.
 ```
 
 ---
@@ -1577,7 +1757,7 @@ ignition-cli resource create ignition/tag-provider --name "MyProvider"
 
 #### resource update
 
-Update an existing resource configuration.
+Update an existing resource configuration. The resource signature (required by the API) is automatically fetched from the resource metadata.
 
 ```bash
 ignition-cli resource update <resource_type> <name> --config <json> [--gateway <profile>] [--url <url>] [--token <token>]
@@ -1613,10 +1793,12 @@ ignition-cli resource update ignition/database-connection "MySQL_Prod" \
 
 #### resource delete
 
-Delete a resource. Prompts for confirmation unless `--force` is used.
+Delete a resource. Uses the Ignition `DELETE /resources/{module}/{type}/{name}/{signature}` endpoint. The resource signature is required; if `--signature` is omitted, the CLI automatically fetches it from the resource metadata.
+
+Prompts for confirmation unless `--force` is used.
 
 ```bash
-ignition-cli resource delete <resource_type> <name> [--force] [--gateway <profile>] [--url <url>] [--token <token>]
+ignition-cli resource delete <resource_type> <name> [--force] [--signature <sig>] [--gateway <profile>] [--url <url>] [--token <token>]
 ```
 
 **Arguments:**
@@ -1631,6 +1813,7 @@ ignition-cli resource delete <resource_type> <name> [--force] [--gateway <profil
 | Option | Short | Description |
 |---|---|---|
 | `--force` | | Skip confirmation prompt |
+| `--signature` | `-s` | Resource signature (auto-fetched if omitted) |
 | `--gateway` | `-g` | Gateway profile |
 | `--url` | | Gateway URL override |
 | `--token` | | API token override |
@@ -1638,11 +1821,11 @@ ignition-cli resource delete <resource_type> <name> [--force] [--gateway <profil
 **Example:**
 
 ```bash
-ignition-cli resource delete ignition/database-connection "OldDB"
-# Delete ignition/database-connection/OldDB? [y/N]: y
-# Resource 'OldDB' (ignition/database-connection) deleted.
-
+# Auto-fetch signature
 ignition-cli resource delete ignition/database-connection "OldDB" --force
+
+# Explicit signature (skips the lookup request)
+ignition-cli resource delete ignition/database-connection "OldDB" --force --signature abc123
 ```
 
 ---
@@ -1679,6 +1862,85 @@ ignition-cli resource names ignition/tag-provider -f json
 
 ---
 
+#### resource upload
+
+Upload a binary datafile to a resource. Used for fonts, theme CSS, icons, database drivers, and other binary resources.
+
+The resource signature is required for uploads. If `--signature` is omitted, the CLI automatically fetches it from the resource metadata.
+
+```bash
+ignition-cli resource upload <resource_type> <name> <file_path> [--signature <sig>] [--filename <name>] [--gateway <profile>] [--url <url>] [--token <token>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `resource_type` | Resource type in `module/type` format |
+| `name` | Resource name |
+| `file_path` | Path to the local file to upload |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--signature` | `-s` | Resource signature (auto-fetched if omitted) |
+| `--filename` | | Remote filename (defaults to local file basename) |
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+
+**Example:**
+
+```bash
+# Upload a CSS file (signature auto-fetched)
+ignition-cli resource upload com.inductiveautomation.perspective/themes custom ./style.css
+
+# Upload with explicit signature and custom remote filename
+ignition-cli resource upload com.inductiveautomation.perspective/fonts MyFont ./font.woff2 \
+  --signature "abc123def" --filename "MyFont-Regular.woff2"
+```
+
+---
+
+#### resource download
+
+Download a binary datafile from a resource to the local filesystem.
+
+```bash
+ignition-cli resource download <resource_type> <name> <filename> [--output <path>] [--gateway <profile>] [--url <url>] [--token <token>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `resource_type` | Resource type in `module/type` format |
+| `name` | Resource name |
+| `filename` | Remote filename to download |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--output` | `-o` | Output file path (defaults to the remote filename) |
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+
+**Example:**
+
+```bash
+# Download a theme CSS file
+ignition-cli resource download com.inductiveautomation.perspective/themes dark variables.css
+
+# Download to a specific path
+ignition-cli resource download com.inductiveautomation.perspective/fonts Roboto Roboto-Regular.woff2 \
+  --output ./fonts/Roboto-Regular.woff2
+```
+
+---
+
 #### resource types
 
 List available resource types discovered from the gateway's OpenAPI spec. Parses the `/openapi.json` endpoint to find resource paths.
@@ -1706,6 +1968,189 @@ $ ignition-cli resource types
 │ ignition/database-connection                       │
 │ ignition/tag-provider                              │
 └────────────────────────────────────────────────────┘
+```
+
+---
+
+### mode
+
+Manage gateway deployment modes. Deployment modes (introduced in Ignition 8.3) allow a single gateway to hold configuration for multiple environments (dev, staging, production).
+
+```
+ignition-cli mode <command>
+```
+
+#### mode list
+
+List all deployment modes on the gateway.
+
+```bash
+ignition-cli mode list [--gateway <profile>] [--url <url>] [--token <token>] [--format <fmt>]
+```
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+| `--format` | `-f` | Output format (default: `table`) |
+
+**Example:**
+
+```bash
+$ ignition-cli mode list
+                  Deployment Modes
+┏━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┓
+┃ Name    ┃ Title       ┃ Description         ┃ Resources ┃
+┡━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━┩
+│ dev     │ Development │ Dev environment     │ 5         │
+│ staging │ Staging     │ Pre-prod            │ 3         │
+│ prod    │ Production  │ Live environment    │ 10        │
+└─────────┴─────────────┴─────────────────────┴───────────┘
+
+ignition-cli mode list -f json
+```
+
+---
+
+#### mode show
+
+Show details of a specific deployment mode.
+
+```bash
+ignition-cli mode show <name> [--gateway <profile>] [--url <url>] [--token <token>] [--format <fmt>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `name` | Mode name |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+| `--format` | `-f` | Output format (default: `table`) |
+
+**Example:**
+
+```bash
+$ ignition-cli mode show dev
+             Mode: dev
+┌───────────────┬─────────────────┐
+│ name          │ dev             │
+│ title         │ Development     │
+│ description   │ Dev environment │
+│ resourceCount │ 5               │
+└───────────────┴─────────────────┘
+```
+
+---
+
+#### mode create
+
+Create a new deployment mode.
+
+```bash
+ignition-cli mode create <name> [--title <title>] [--description <desc>] [--gateway <profile>] [--url <url>] [--token <token>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `name` | Mode name |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--title` | `-t` | Short title for the mode |
+| `--description` | `-d` | Mode description |
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+
+**Example:**
+
+```bash
+ignition-cli mode create dev --title "Development" --description "Dev environment"
+# Deployment mode 'dev' created.
+```
+
+---
+
+#### mode update
+
+Update or rename an existing deployment mode.
+
+```bash
+ignition-cli mode update <name> [--name <new_name>] [--title <title>] [--description <desc>] [--gateway <profile>] [--url <url>] [--token <token>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `name` | Current mode name |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--name` | `-n` | Rename the mode |
+| `--title` | `-t` | New title |
+| `--description` | `-d` | New description |
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+
+**Example:**
+
+```bash
+# Update description
+ignition-cli mode update dev --description "Updated dev environment"
+
+# Rename a mode
+ignition-cli mode update staging --name pre-prod --title "Pre-Production"
+```
+
+---
+
+#### mode delete
+
+Delete a deployment mode. Prompts for confirmation unless `--force` is used.
+
+```bash
+ignition-cli mode delete <name> [--force] [--gateway <profile>] [--url <url>] [--token <token>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `name` | Mode name to delete |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--force` | | Skip confirmation prompt |
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+
+**Example:**
+
+```bash
+ignition-cli mode delete test-mode --force
+# Deployment mode 'test-mode' deleted.
 ```
 
 ---
@@ -2007,6 +2452,46 @@ ignition-cli api spec -o gateway-api.json
 ignition-cli api get /gateway-info
 ```
 
+### Deployment Mode Management
+
+Set up deployment modes for multi-environment configuration on a single gateway:
+
+```bash
+# Create modes
+ignition-cli mode create dev --title "Development" --description "Dev environment"
+ignition-cli mode create staging --title "Staging" --description "Pre-production"
+ignition-cli mode create prod --title "Production" --description "Live environment"
+
+# List modes
+ignition-cli mode list
+
+# Update a mode
+ignition-cli mode update staging --description "QA and staging"
+
+# Clean up
+ignition-cli mode delete dev --force
+```
+
+### Theme and Binary Resource Management
+
+Download, modify, and re-upload binary resources like Perspective themes:
+
+```bash
+# See what files a theme contains
+ignition-cli resource show com.inductiveautomation.perspective/themes custom -f json
+
+# Download a CSS file for editing
+ignition-cli resource download com.inductiveautomation.perspective/themes custom index.css \
+  --output ./theme-work/index.css
+
+# Edit the file locally, then upload it back
+ignition-cli resource upload com.inductiveautomation.perspective/themes custom ./theme-work/index.css \
+  --filename index.css
+
+# Trigger a scan so the gateway picks up changes
+ignition-cli gateway scan-config
+```
+
 ### Bulk Resource Inventory
 
 Export an inventory of all resource types and their instances:
@@ -2029,11 +2514,12 @@ done
 | Code | Name | Description |
 |---|---|---|
 | 0 | Success | Command completed successfully |
-| 1 | General Error | Generic error (invalid input, config issues, `ValueError`) |
+| 1 | General Error | Generic error (invalid input, unexpected failures) |
 | 2 | Connection Error | Cannot connect to the gateway (network, DNS, timeout) |
 | 3 | Authentication Error | Authentication failed (HTTP 401 or 403) |
 | 4 | Not Found | Requested resource not found (HTTP 404) |
 | 5 | Conflict | Resource conflict (HTTP 409, e.g. duplicate name) |
+| 6 | Configuration Error | Missing or invalid configuration (no URL, bad profile) |
 
 ### Common Errors
 

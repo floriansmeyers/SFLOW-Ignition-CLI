@@ -92,5 +92,7 @@ class TestConfigManager:
         assert resolved.token == "env:token"
 
     def test_resolve_gateway_no_url_raises(self, config_manager: ConfigManager):
-        with pytest.raises(ValueError, match="No gateway URL configured"):
+        from ignition_cli.client.errors import ConfigurationError
+
+        with pytest.raises(ConfigurationError, match="No gateway URL configured"):
             config_manager.resolve_gateway()

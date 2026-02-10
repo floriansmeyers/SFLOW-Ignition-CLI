@@ -119,3 +119,31 @@ class TestProjectCommands:
         result = runner.invoke(app, ["project", "list", "-f", "json", "--url", GW, "--token", "k:s"])
         assert result.exit_code == 0
         assert "P1" in result.output
+
+
+class TestProjectCopyRename:
+    @respx.mock
+    def test_copy_project(self):
+        respx.post(f"{BASE}/projects/copy").mock(
+            return_value=httpx.Response(200, json={})
+        )
+        result = runner.invoke(app, [
+            "project", "copy", "MyApp", "--name", "MyApp-Copy",
+            "--url", GW, "--token", "k:s",
+        ])
+        assert result.exit_code == 0
+        assert "copied" in result.output
+        assert "MyApp-Copy" in result.output
+
+    @respx.mock
+    def test_rename_project(self):
+        respx.post(f"{BASE}/projects/rename/OldName").mock(
+            return_value=httpx.Response(200, json={})
+        )
+        result = runner.invoke(app, [
+            "project", "rename", "OldName", "--name", "NewName",
+            "--url", GW, "--token", "k:s",
+        ])
+        assert result.exit_code == 0
+        assert "renamed" in result.output
+        assert "NewName" in result.output

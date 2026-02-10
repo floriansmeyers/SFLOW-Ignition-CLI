@@ -12,8 +12,14 @@ import typer
 from rich.console import Console
 
 from ignition_cli.client.errors import error_handler
-from ignition_cli.client.gateway import GatewayClient
-from ignition_cli.config.manager import ConfigManager
+from ignition_cli.commands._common import (
+    FormatOpt,
+    GatewayOpt,
+    TokenOpt,
+    UrlOpt,
+    extract_items,
+    make_client,
+)
 from ignition_cli.output.formatter import output
 
 app = typer.Typer(name="device", help="Manage device connections.")
@@ -24,25 +30,21 @@ _DEVICE_MODULE = "com.inductiveautomation.opcua"
 _DEVICE_TYPE = "device"
 
 
-def _client(gateway: str | None, url: str | None, token: str | None) -> GatewayClient:
-    mgr = ConfigManager()
-    profile = mgr.resolve_gateway(profile_name=gateway, url=url, token=token)
-    return GatewayClient(profile)
-
-
 @app.command("list")
 @error_handler
 def list_devices(
     status_filter: Annotated[Optional[str], typer.Option("--status", help="Filter by status")] = None,
-    gateway: Annotated[Optional[str], typer.Option("--gateway", "-g")] = None,
-    url: Annotated[Optional[str], typer.Option("--url")] = None,
-    token: Annotated[Optional[str], typer.Option("--token")] = None,
-    fmt: Annotated[str, typer.Option("--format", "-f")] = "table",
+    module: Annotated[str, typer.Option("--module", help="Resource module")] = _DEVICE_MODULE,
+    device_type: Annotated[str, typer.Option("--type", help="Resource type")] = _DEVICE_TYPE,
+    gateway: GatewayOpt = None,
+    url: UrlOpt = None,
+    token: TokenOpt = None,
+    fmt: FormatOpt = "table",
 ) -> None:
     """List device connections."""
-    with _client(gateway, url, token) as client:
-        data = client.get_json(f"/resources/list/{_DEVICE_MODULE}/{_DEVICE_TYPE}")
-        items = data if isinstance(data, list) else data.get("resources", data.get("items", []))
+    with make_client(gateway, url, token) as client:
+        data = client.get_json(f"/resources/list/{module}/{device_type}")
+        items = extract_items(data, "resources")
         if status_filter:
             items = [d for d in items if status_filter.lower() in d.get("state", "").lower()]
         columns = ["Name", "Type", "Enabled", "State", "Hostname"]
@@ -63,42 +65,62 @@ def list_devices(
 @error_handler
 def show(
     name: Annotated[str, typer.Argument(help="Device name")],
-    gateway: Annotated[Optional[str], typer.Option("--gateway", "-g")] = None,
-    url: Annotated[Optional[str], typer.Option("--url")] = None,
-    token: Annotated[Optional[str], typer.Option("--token")] = None,
-    fmt: Annotated[str, typer.Option("--format", "-f")] = "table",
+    module: Annotated[str, typer.Option("--module", help="Resource module")] = _DEVICE_MODULE,
+    device_type: Annotated[str, typer.Option("--type", help="Resource type")] = _DEVICE_TYPE,
+    gateway: GatewayOpt = None,
+    url: UrlOpt = None,
+    token: TokenOpt = None,
+    fmt: FormatOpt = "table",
 ) -> None:
     """Show device connection details."""
-    with _client(gateway, url, token) as client:
-        data = client.get_json(f"/resources/find/{_DEVICE_MODULE}/{_DEVICE_TYPE}/{name}")
+    with make_client(gateway, url, token) as client:
+        data = client.get_json(f"/resources/find/{module}/{device_type}/{name}")
         output(data, fmt, kv=True, title=f"Device: {name}")
 
 
-@app.command()
+@app.command(deprecated=True, hidden=True)
 @error_handler
 def status(
     name: Annotated[str, typer.Argument(help="Device name")],
-    gateway: Annotated[Optional[str], typer.Option("--gateway", "-g")] = None,
-    url: Annotated[Optional[str], typer.Option("--url")] = None,
-    token: Annotated[Optional[str], typer.Option("--token")] = None,
-    fmt: Annotated[str, typer.Option("--format", "-f")] = "table",
+    gateway: GatewayOpt = None,
+    url: UrlOpt = None,
+    token: TokenOpt = None,
+    fmt: FormatOpt = "table",
 ) -> None:
-    """Show device configuration (retrieved via resource find)."""
-    with _client(gateway, url, token) as client:
-        data = client.get_json(f"/resources/find/{_DEVICE_MODULE}/{_DEVICE_TYPE}/{name}")
-        output(data, fmt, kv=True, title=f"Device Status: {name}")
+    """Show device configuration (use 'device show' instead)."""
+    show(name=name, gateway=gateway, url=url, token=token, fmt=fmt)
 
 
 @app.command()
 @error_handler
 def restart(
     name: Annotated[str, typer.Argument(help="Device name")],
-    gateway: Annotated[Optional[str], typer.Option("--gateway", "-g")] = None,
-    url: Annotated[Optional[str], typer.Option("--url")] = None,
-    token: Annotated[Optional[str], typer.Option("--token")] = None,
+    module: Annotated[str, typer.Option("--module", help="Resource module")] = _DEVICE_MODULE,
+    device_type: Annotated[str, typer.Option("--type", help="Resource type")] = _DEVICE_TYPE,
+    gateway: GatewayOpt = None,
+    url: UrlOpt = None,
+    token: TokenOpt = None,
 ) -> None:
-    """Restart a device connection by toggling its enabled state."""
-    console.print(
-        "[yellow]Note: The Ignition REST API does not have a direct device restart endpoint. "
-        "Use the gateway web UI or the 'resource update' command to toggle the device.[/]"
-    )
+    """Restart a device connection by toggling its enabled state.
+
+    Disables the device, then re-enables it, causing Ignition to
+    re-establish the connection.
+    """
+    import time
+
+    with make_client(gateway, url, token) as client:
+        data = client.get_json(f"/resources/find/{module}/{device_type}/{name}")
+        if not isinstance(data, dict):
+            console.print(f"[red]Unexpected response for device '{name}'.[/]")
+            raise typer.Exit(1)
+
+        # Disable
+        body = {**data, "enabled": False}
+        client.put(f"/resources/{module}/{device_type}", json=body)
+        console.print(f"[dim]Disabled '{name}'...[/]")
+        time.sleep(1)
+
+        # Re-enable
+        body["enabled"] = True
+        client.put(f"/resources/{module}/{device_type}", json=body)
+        console.print(f"[green]Device '{name}' restarted (toggled enabled state).[/]")

@@ -6,6 +6,9 @@ from pathlib import Path
 
 from rich.console import Console
 
+import httpx
+
+from ignition_cli.client.errors import IgnitionCLIError
 from ignition_cli.config.models import GatewayProfile
 
 
@@ -42,7 +45,7 @@ def watch_and_sync(
                 if change_type == Change.deleted:
                     try:
                         client.delete(f"/projects/{project_name}/resources/{rel_path}")
-                    except Exception as exc:
+                    except (httpx.HTTPError, IgnitionCLIError) as exc:
                         console.print(f"  [yellow]Warning: could not delete remote resource: {exc}[/]")
                 else:
                     file_path = Path(changed_path)
@@ -52,5 +55,5 @@ def watch_and_sync(
                                 f"/projects/{project_name}/resources/{rel_path}",
                                 content=file_path.read_bytes(),
                             )
-                        except Exception as exc:
+                        except (httpx.HTTPError, IgnitionCLIError) as exc:
                             console.print(f"  [yellow]Warning: could not sync resource: {exc}[/]")

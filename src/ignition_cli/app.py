@@ -7,7 +7,16 @@ from typing import Optional
 import typer
 
 from ignition_cli import __version__
-from ignition_cli.commands import api, config_cmd, device, gateway, project, resource, tag
+from ignition_cli.commands import (
+    api,
+    config_cmd,
+    device,
+    gateway,
+    modes,
+    project,
+    resource,
+    tag,
+)
 
 app = typer.Typer(
     name="ignition-cli",
@@ -39,6 +48,7 @@ app.add_typer(project.app, name="project")
 app.add_typer(tag.app, name="tag")
 app.add_typer(device.app, name="device")
 app.add_typer(resource.app, name="resource")
+app.add_typer(modes.app, name="mode")
 app.add_typer(api.app, name="api")
 
 
