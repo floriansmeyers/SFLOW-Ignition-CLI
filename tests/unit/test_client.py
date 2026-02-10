@@ -8,7 +8,6 @@ from ignition_cli.client.auth import APITokenAuth, BasicAuth, resolve_auth
 from ignition_cli.client.errors import (
     AuthenticationError,
     GatewayAPIError,
-    GatewayConnectionError,
     NotFoundError,
 )
 from ignition_cli.client.gateway import GatewayClient
@@ -29,7 +28,10 @@ class TestAuth:
         assert isinstance(auth, APITokenAuth)
 
     def test_resolve_auth_basic(self):
-        profile = GatewayProfile(name="t", url="https://gw:8043", username="admin", password="pass")
+        profile = GatewayProfile(
+            name="t", url="https://gw:8043",
+            username="admin", password="pass",
+        )
         auth = resolve_auth(profile)
         assert isinstance(auth, BasicAuth)
 
@@ -41,7 +43,10 @@ class TestAuth:
 class TestGatewayClient:
     @respx.mock
     def test_get_json(self):
-        profile = GatewayProfile(name="test", url="https://gw:8043", token="k:s", verify_ssl=False)
+        profile = GatewayProfile(
+            name="test", url="https://gw:8043",
+            token="k:s", verify_ssl=False,
+        )
         respx.get("https://gw:8043/data/api/v1/status").mock(
             return_value=httpx.Response(200, json={"state": "RUNNING"})
         )
@@ -51,37 +56,46 @@ class TestGatewayClient:
 
     @respx.mock
     def test_auth_error(self):
-        profile = GatewayProfile(name="test", url="https://gw:8043", token="bad:token", verify_ssl=False)
+        profile = GatewayProfile(
+            name="test", url="https://gw:8043",
+            token="bad:token", verify_ssl=False,
+        )
         respx.get("https://gw:8043/data/api/v1/status").mock(
             return_value=httpx.Response(401, json={"message": "Unauthorized"})
         )
-        with GatewayClient(profile) as client:
-            with pytest.raises(AuthenticationError):
-                client.get("/status")
+        with GatewayClient(profile) as client, pytest.raises(AuthenticationError):
+            client.get("/status")
 
     @respx.mock
     def test_not_found(self):
-        profile = GatewayProfile(name="test", url="https://gw:8043", token="k:s", verify_ssl=False)
+        profile = GatewayProfile(
+            name="test", url="https://gw:8043",
+            token="k:s", verify_ssl=False,
+        )
         respx.get("https://gw:8043/data/api/v1/nope").mock(
             return_value=httpx.Response(404, json={"message": "Not found"})
         )
-        with GatewayClient(profile) as client:
-            with pytest.raises(NotFoundError):
-                client.get("/nope")
+        with GatewayClient(profile) as client, pytest.raises(NotFoundError):
+            client.get("/nope")
 
     @respx.mock
     def test_server_error(self):
-        profile = GatewayProfile(name="test", url="https://gw:8043", token="k:s", verify_ssl=False)
+        profile = GatewayProfile(
+            name="test", url="https://gw:8043",
+            token="k:s", verify_ssl=False,
+        )
         respx.get("https://gw:8043/data/api/v1/broken").mock(
             return_value=httpx.Response(500, text="Internal Server Error")
         )
-        with GatewayClient(profile) as client:
-            with pytest.raises(GatewayAPIError):
-                client.get("/broken")
+        with GatewayClient(profile) as client, pytest.raises(GatewayAPIError):
+            client.get("/broken")
 
     @respx.mock
     def test_post(self):
-        profile = GatewayProfile(name="test", url="https://gw:8043", token="k:s", verify_ssl=False)
+        profile = GatewayProfile(
+            name="test", url="https://gw:8043",
+            token="k:s", verify_ssl=False,
+        )
         respx.post("https://gw:8043/data/api/v1/resource").mock(
             return_value=httpx.Response(201, json={"id": "new"})
         )

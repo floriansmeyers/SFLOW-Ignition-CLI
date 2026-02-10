@@ -1,10 +1,12 @@
-"""Project commands — list, show, create, delete, export, import, diff, watch, resources."""
+"""Project commands.
+
+list, show, create, delete, export, import, diff, watch, resources.
+"""
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -29,7 +31,10 @@ console = Console()
 @app.command("list")
 @error_handler
 def list_projects(
-    filter_text: Annotated[Optional[str], typer.Option("--filter", help="Filter by name")] = None,
+    filter_text: Annotated[
+        str | None,
+        typer.Option("--filter", help="Filter by name"),
+    ] = None,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -40,7 +45,10 @@ def list_projects(
         data = client.get_json("/projects/list")
         items = extract_items(data, "projects")
         if filter_text:
-            items = [p for p in items if filter_text.lower() in p.get("name", "").lower()]
+            items = [
+                p for p in items
+                if filter_text.lower() in p.get("name", "").lower()
+            ]
         columns = ["Name", "Title", "Enabled", "State", "Last Modified"]
         rows = [
             [
@@ -74,8 +82,11 @@ def show(
 @error_handler
 def create(
     name: Annotated[str, typer.Argument(help="Project name")],
-    title: Annotated[Optional[str], typer.Option("--title", "-t", help="Project title")] = None,
-    description: Annotated[Optional[str], typer.Option("--description", "-d")] = None,
+    title: Annotated[
+        str | None,
+        typer.Option("--title", "-t", help="Project title"),
+    ] = None,
+    description: Annotated[str | None, typer.Option("--description", "-d")] = None,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -116,7 +127,10 @@ def delete(
 @error_handler
 def export_project(
     name: Annotated[str, typer.Argument(help="Project name")],
-    output_file: Annotated[Optional[str], typer.Option("--output", "-o", help="Output file path")] = None,
+    output_file: Annotated[
+        str | None,
+        typer.Option("--output", "-o", help="Output file path"),
+    ] = None,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -126,15 +140,28 @@ def export_project(
         resp = client.get(f"/projects/export/{name}")
         dest = Path(output_file) if output_file else Path(f"{name}.zip")
         dest.write_bytes(resp.content)
-        console.print(f"[green]Project '{name}' exported to {dest}[/] ({len(resp.content):,} bytes)")
+        size = len(resp.content)
+        console.print(
+            f"[green]Project '{name}' exported to"
+            f" {dest}[/] ({size:,} bytes)"
+        )
 
 
 @app.command("import")
 @error_handler
 def import_project(
     file: Annotated[str, typer.Argument(help="Project file to import (.zip)")],
-    name: Annotated[Optional[str], typer.Option("--name", "-n", help="Project name (defaults to filename stem)")] = None,
-    overwrite: Annotated[bool, typer.Option("--overwrite", help="Overwrite if exists")] = False,
+    name: Annotated[
+        str | None,
+        typer.Option(
+            "--name", "-n",
+            help="Project name (defaults to filename stem)",
+        ),
+    ] = None,
+    overwrite: Annotated[
+        bool,
+        typer.Option("--overwrite", help="Overwrite if exists"),
+    ] = False,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -167,7 +194,13 @@ def copy(
 ) -> None:
     """Copy a project to a new name."""
     with make_client(gateway, url, token) as client:
-        client.post("/projects/copy", json={"projectName": name, "newProjectName": new_name})
+        client.post(
+            "/projects/copy",
+            json={
+                "projectName": name,
+                "newProjectName": new_name,
+            },
+        )
         console.print(f"[green]Project '{name}' copied to '{new_name}'.[/]")
 
 
@@ -201,7 +234,12 @@ def resources(
         items = extract_items(data, "resources")
         columns = ["Name", "Type", "Path", "Scope"]
         rows = [
-            [r.get("name", ""), r.get("type", ""), r.get("path", ""), r.get("scope", "")]
+            [
+                r.get("name", ""),
+                r.get("type", ""),
+                r.get("path", ""),
+                r.get("scope", ""),
+            ]
             for r in items
         ]
         output(data, fmt, columns=columns, rows=rows, title=f"Resources: {name}")
@@ -211,7 +249,13 @@ def resources(
 @error_handler
 def diff(
     name: Annotated[str, typer.Argument(help="Project name")],
-    target: Annotated[str, typer.Option("--target", "-t", help="Target gateway profile for comparison")],
+    target: Annotated[
+        str,
+        typer.Option(
+            "--target", "-t",
+            help="Target gateway profile for comparison",
+        ),
+    ],
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -223,7 +267,10 @@ def diff(
     source_profile = mgr.resolve_gateway(profile_name=gateway, url=url, token=token)
     target_profile = mgr.resolve_gateway(profile_name=target)
 
-    with GatewayClient(source_profile) as source, GatewayClient(target_profile) as target_client:
+    with (
+        GatewayClient(source_profile) as source,
+        GatewayClient(target_profile) as target_client,
+    ):
         source_data = source.get_json(f"/projects/find/{name}")
         target_data = target_client.get_json(f"/projects/find/{name}")
         diff_projects(name, source_data, target_data, console)

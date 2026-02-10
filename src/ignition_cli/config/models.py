@@ -10,7 +10,9 @@ class GatewayProfile(BaseModel):
 
     name: str
     url: str = Field(description="Gateway base URL, e.g. https://gateway:8043")
-    token: str | None = Field(default=None, description="API token (format: keyId:secretKey)")
+    token: str | None = Field(
+        default=None, description="API token (format: keyId:secretKey)",
+    )
     username: str | None = Field(default=None, description="Basic auth username")
     password: str | None = Field(default=None, description="Basic auth password")
     verify_ssl: bool = Field(default=True, description="Verify SSL certificates")
@@ -18,7 +20,10 @@ class GatewayProfile(BaseModel):
 
     @property
     def auth_configured(self) -> bool:
-        return self.token is not None or (self.username is not None and self.password is not None)
+        has_basic = (
+            self.username is not None and self.password is not None
+        )
+        return self.token is not None or has_basic
 
 
 class CLIConfig(BaseModel):

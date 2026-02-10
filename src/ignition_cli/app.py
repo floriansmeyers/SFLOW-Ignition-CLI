@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 import typer
 
 from ignition_cli import __version__
@@ -34,8 +32,11 @@ def version_callback(value: bool) -> None:
 
 @app.callback()
 def main_callback(
-    version: Optional[bool] = typer.Option(
-        None, "--version", "-V", callback=version_callback, is_eager=True, help="Show version and exit."
+    version: bool | None = typer.Option(
+        None, "--version", "-V",
+        callback=version_callback,
+        is_eager=True,
+        help="Show version and exit.",
     ),
 ) -> None:
     """Ignition SCADA CLI — manage gateways, projects, tags, and more."""

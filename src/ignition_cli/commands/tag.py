@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -45,9 +45,15 @@ def _build_tree(node_data: dict | list, tree: Tree, recursive: bool = False) -> 
 @app.command()
 @error_handler
 def browse(
-    path: Annotated[Optional[str], typer.Argument(help="Tag path to browse")] = None,
-    recursive: Annotated[bool, typer.Option("--recursive", "-r", help="Browse recursively")] = False,
-    provider: Annotated[str, typer.Option("--provider", "-p", help="Tag provider")] = "default",
+    path: Annotated[str | None, typer.Argument(help="Tag path to browse")] = None,
+    recursive: Annotated[
+        bool,
+        typer.Option("--recursive", "-r", help="Browse recursively"),
+    ] = False,
+    provider: Annotated[
+        str,
+        typer.Option("--provider", "-p", help="Tag provider"),
+    ] = "default",
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -88,19 +94,27 @@ def read(
 ) -> None:
     """Read one or more tag values.
 
-    Note: Tag reading is not part of the standard Ignition REST API.
-    This requires a gateway with a WebDev endpoint or custom module providing this capability.
+    Note: Tag reading is not part of the standard Ignition
+    REST API. This requires a gateway with a WebDev endpoint
+    or custom module providing this capability.
     """
-    console.print("[yellow]Warning: /tags/read is not a standard Ignition REST API endpoint. "
-                  "This requires a WebDev module or custom endpoint.[/]")
+    console.print(
+        "[yellow]Warning: /tags/read is not a standard"
+        " Ignition REST API endpoint. This requires a"
+        " WebDev module or custom endpoint.[/]"
+    )
     with make_client(gateway, url, token) as client:
         try:
             resp = client.post("/tags/read", json=paths, params={"provider": provider})
         except NotFoundError:
-            console.print("[red]Endpoint /tags/read not found. This gateway does not support "
-                          "tag reading via the REST API. Install the WebDev module or configure "
-                          "a custom endpoint.[/]")
-            raise typer.Exit(1)
+            console.print(
+                "[red]Endpoint /tags/read not found."
+                " This gateway does not support tag"
+                " reading via the REST API. Install"
+                " the WebDev module or configure a"
+                " custom endpoint.[/]"
+            )
+            raise typer.Exit(1) from None
         items = resp.json()
         if not isinstance(items, list):
             items = extract_items(items, "values")
@@ -133,11 +147,15 @@ def write(
 ) -> None:
     """Write a value to a tag.
 
-    Note: Tag writing is not part of the standard Ignition REST API.
-    This requires a gateway with a WebDev endpoint or custom module providing this capability.
+    Note: Tag writing is not part of the standard Ignition
+    REST API. This requires a gateway with a WebDev endpoint
+    or custom module providing this capability.
     """
-    console.print("[yellow]Warning: /tags/write is not a standard Ignition REST API endpoint. "
-                  "This requires a WebDev module or custom endpoint.[/]")
+    console.print(
+        "[yellow]Warning: /tags/write is not a standard"
+        " Ignition REST API endpoint. This requires a"
+        " WebDev module or custom endpoint.[/]"
+    )
     # Try to parse as JSON for numeric/boolean values
     try:
         parsed = json.loads(value)
@@ -146,20 +164,34 @@ def write(
 
     with make_client(gateway, url, token) as client:
         try:
-            client.post("/tags/write", json=[{"path": path, "value": parsed}], params={"provider": provider})
+            client.post(
+                "/tags/write",
+                json=[{"path": path, "value": parsed}],
+                params={"provider": provider},
+            )
         except NotFoundError:
-            console.print("[red]Endpoint /tags/write not found. This gateway does not support "
-                          "tag writing via the REST API. Install the WebDev module or configure "
-                          "a custom endpoint.[/]")
-            raise typer.Exit(1)
+            console.print(
+                "[red]Endpoint /tags/write not found."
+                " This gateway does not support tag"
+                " writing via the REST API. Install"
+                " the WebDev module or configure a"
+                " custom endpoint.[/]"
+            )
+            raise typer.Exit(1) from None
         console.print(f"[green]Wrote {parsed!r} to {path}[/]")
 
 
 @app.command("export")
 @error_handler
 def export_tags(
-    path: Annotated[Optional[str], typer.Argument(help="Tag path to export (root if omitted)")] = None,
-    output_file: Annotated[Optional[str], typer.Option("--output", "-o", help="Output file")] = None,
+    path: Annotated[
+        str | None,
+        typer.Argument(help="Tag path to export (root if omitted)"),
+    ] = None,
+    output_file: Annotated[
+        str | None,
+        typer.Option("--output", "-o", help="Output file"),
+    ] = None,
     provider: Annotated[str, typer.Option("--provider", "-p")] = "default",
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
@@ -188,7 +220,10 @@ def import_tags(
         "--collision-policy", "-c",
         help="Collision policy: Abort, Overwrite, Rename, Ignore, MergeOverwrite",
     )] = "MergeOverwrite",
-    path: Annotated[Optional[str], typer.Option("--path", help="Target path for import")] = None,
+    path: Annotated[
+        str | None,
+        typer.Option("--path", help="Target path for import"),
+    ] = None,
     provider: Annotated[str, typer.Option("--provider", "-p")] = "default",
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
@@ -205,7 +240,11 @@ def import_tags(
     file_type = type_map.get(suffix, "json")
 
     tag_data = file_path.read_bytes()
-    content_type = "application/json" if file_type == "json" else "application/octet-stream"
+    content_type = (
+        "application/json"
+        if file_type == "json"
+        else "application/octet-stream"
+    )
 
     with make_client(gateway, url, token) as client:
         params: dict[str, str] = {
@@ -221,7 +260,10 @@ def import_tags(
             params=params,
             headers={"Content-Type": content_type},
         )
-        console.print(f"[green]Tags imported from {file} (policy: {collision_policy}).[/]")
+        console.print(
+            f"[green]Tags imported from {file}"
+            f" (policy: {collision_policy}).[/]"
+        )
 
 
 @app.command()

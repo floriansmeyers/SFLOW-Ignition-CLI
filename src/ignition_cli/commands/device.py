@@ -6,7 +6,7 @@ com.inductiveautomation.opcua module.
 
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -33,9 +33,16 @@ _DEVICE_TYPE = "device"
 @app.command("list")
 @error_handler
 def list_devices(
-    status_filter: Annotated[Optional[str], typer.Option("--status", help="Filter by status")] = None,
-    module: Annotated[str, typer.Option("--module", help="Resource module")] = _DEVICE_MODULE,
-    device_type: Annotated[str, typer.Option("--type", help="Resource type")] = _DEVICE_TYPE,
+    status_filter: Annotated[
+        str | None,
+        typer.Option("--status", help="Filter by status"),
+    ] = None,
+    module: Annotated[
+        str, typer.Option("--module", help="Resource module"),
+    ] = _DEVICE_MODULE,
+    device_type: Annotated[
+        str, typer.Option("--type", help="Resource type"),
+    ] = _DEVICE_TYPE,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -46,7 +53,10 @@ def list_devices(
         data = client.get_json(f"/resources/list/{module}/{device_type}")
         items = extract_items(data, "resources")
         if status_filter:
-            items = [d for d in items if status_filter.lower() in d.get("state", "").lower()]
+            items = [
+                d for d in items
+                if status_filter.lower() in d.get("state", "").lower()
+            ]
         columns = ["Name", "Type", "Enabled", "State", "Hostname"]
         rows = [
             [
@@ -65,8 +75,12 @@ def list_devices(
 @error_handler
 def show(
     name: Annotated[str, typer.Argument(help="Device name")],
-    module: Annotated[str, typer.Option("--module", help="Resource module")] = _DEVICE_MODULE,
-    device_type: Annotated[str, typer.Option("--type", help="Resource type")] = _DEVICE_TYPE,
+    module: Annotated[
+        str, typer.Option("--module", help="Resource module"),
+    ] = _DEVICE_MODULE,
+    device_type: Annotated[
+        str, typer.Option("--type", help="Resource type"),
+    ] = _DEVICE_TYPE,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -95,8 +109,12 @@ def status(
 @error_handler
 def restart(
     name: Annotated[str, typer.Argument(help="Device name")],
-    module: Annotated[str, typer.Option("--module", help="Resource module")] = _DEVICE_MODULE,
-    device_type: Annotated[str, typer.Option("--type", help="Resource type")] = _DEVICE_TYPE,
+    module: Annotated[
+        str, typer.Option("--module", help="Resource module"),
+    ] = _DEVICE_MODULE,
+    device_type: Annotated[
+        str, typer.Option("--type", help="Resource type"),
+    ] = _DEVICE_TYPE,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,

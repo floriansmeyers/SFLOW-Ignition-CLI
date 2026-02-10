@@ -17,7 +17,10 @@ class TestAPICommands:
         respx.get("https://gw:8043/data/api/v1/gateway-info").mock(
             return_value=httpx.Response(200, json={"state": "RUNNING"})
         )
-        result = runner.invoke(app, ["api", "get", "/gateway-info", "--url", "https://gw:8043", "--token", "k:s"])
+        result = runner.invoke(app, [
+            "api", "get", "/gateway-info",
+            "--url", "https://gw:8043", "--token", "k:s",
+        ])
         assert result.exit_code == 0
         assert "RUNNING" in result.output
 
@@ -28,7 +31,9 @@ class TestAPICommands:
         )
         result = runner.invoke(
             app,
-            ["api", "post", "/projects", "--data", '{"name":"test"}', "--url", "https://gw:8043", "--token", "k:s"],
+            ["api", "post", "/projects",
+             "--data", '{"name":"test"}',
+             "--url", "https://gw:8043", "--token", "k:s"],
         )
         assert result.exit_code == 0
         assert "created" in result.output
@@ -38,7 +43,10 @@ class TestAPICommands:
         respx.delete("https://gw:8043/data/api/v1/projects/old").mock(
             return_value=httpx.Response(204)
         )
-        result = runner.invoke(app, ["api", "delete", "/projects/old", "--url", "https://gw:8043", "--token", "k:s"])
+        result = runner.invoke(app, [
+            "api", "delete", "/projects/old",
+            "--url", "https://gw:8043", "--token", "k:s",
+        ])
         assert result.exit_code == 0
         assert "Deleted" in result.output
 

@@ -5,7 +5,8 @@ from __future__ import annotations
 import csv
 import io
 import json
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from rich.console import Console
 

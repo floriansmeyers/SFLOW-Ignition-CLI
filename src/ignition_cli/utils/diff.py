@@ -16,8 +16,12 @@ def diff_projects(
     console: Console,
 ) -> None:
     """Show a colored diff between project data from two gateways."""
-    source_json = json.dumps(source_data, indent=2, sort_keys=True).splitlines(keepends=True)
-    target_json = json.dumps(target_data, indent=2, sort_keys=True).splitlines(keepends=True)
+    source_json = json.dumps(
+        source_data, indent=2, sort_keys=True,
+    ).splitlines(keepends=True)
+    target_json = json.dumps(
+        target_data, indent=2, sort_keys=True,
+    ).splitlines(keepends=True)
 
     diff_lines = list(difflib.unified_diff(
         source_json,

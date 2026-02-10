@@ -1,6 +1,5 @@
 """Tests for config manager."""
 
-import os
 
 import pytest
 
@@ -13,7 +12,10 @@ class TestConfigManager:
         assert config_manager.config.profiles == {}
         assert config_manager.config.default_profile is None
 
-    def test_add_profile(self, config_manager: ConfigManager, sample_profile: GatewayProfile):
+    def test_add_profile(
+        self, config_manager: ConfigManager,
+        sample_profile: GatewayProfile,
+    ):
         config_manager.add_profile(sample_profile)
         assert "test-gw" in config_manager.config.profiles
         assert config_manager.config.default_profile == "test-gw"
@@ -25,7 +27,10 @@ class TestConfigManager:
         config_manager.add_profile(p2)
         assert config_manager.config.default_profile == "first"
 
-    def test_remove_profile(self, config_manager: ConfigManager, sample_profile: GatewayProfile):
+    def test_remove_profile(
+        self, config_manager: ConfigManager,
+        sample_profile: GatewayProfile,
+    ):
         config_manager.add_profile(sample_profile)
         assert config_manager.remove_profile("test-gw") is True
         assert "test-gw" not in config_manager.config.profiles
@@ -51,19 +56,28 @@ class TestConfigManager:
     def test_set_default_nonexistent(self, config_manager: ConfigManager):
         assert config_manager.set_default("nope") is False
 
-    def test_get_profile(self, config_manager: ConfigManager, sample_profile: GatewayProfile):
+    def test_get_profile(
+        self, config_manager: ConfigManager,
+        sample_profile: GatewayProfile,
+    ):
         config_manager.add_profile(sample_profile)
         p = config_manager.get_profile("test-gw")
         assert p is not None
         assert p.name == "test-gw"
 
-    def test_get_default_profile(self, config_manager: ConfigManager, sample_profile: GatewayProfile):
+    def test_get_default_profile(
+        self, config_manager: ConfigManager,
+        sample_profile: GatewayProfile,
+    ):
         config_manager.add_profile(sample_profile)
         p = config_manager.get_profile()
         assert p is not None
         assert p.name == "test-gw"
 
-    def test_save_and_reload(self, config_manager: ConfigManager, sample_profile: GatewayProfile):
+    def test_save_and_reload(
+        self, config_manager: ConfigManager,
+        sample_profile: GatewayProfile,
+    ):
         config_manager.add_profile(sample_profile)
         # Create a new manager pointing to the same file to test persistence
         mgr2 = ConfigManager(config_path=config_manager.config_path)
@@ -72,19 +86,30 @@ class TestConfigManager:
         assert p.url == "https://localhost:8043"
         assert p.token == "testkey:testsecret"
 
-    def test_resolve_gateway_from_profile(self, config_manager: ConfigManager, sample_profile: GatewayProfile):
+    def test_resolve_gateway_from_profile(
+        self, config_manager: ConfigManager,
+        sample_profile: GatewayProfile,
+    ):
         config_manager.add_profile(sample_profile)
         resolved = config_manager.resolve_gateway()
         assert resolved.url == "https://localhost:8043"
         assert resolved.token == "testkey:testsecret"
 
-    def test_resolve_gateway_cli_overrides(self, config_manager: ConfigManager, sample_profile: GatewayProfile):
+    def test_resolve_gateway_cli_overrides(
+        self, config_manager: ConfigManager,
+        sample_profile: GatewayProfile,
+    ):
         config_manager.add_profile(sample_profile)
-        resolved = config_manager.resolve_gateway(url="https://other:8043", token="new:token")
+        resolved = config_manager.resolve_gateway(
+            url="https://other:8043", token="new:token",
+        )
         assert resolved.url == "https://other:8043"
         assert resolved.token == "new:token"
 
-    def test_resolve_gateway_env_vars(self, config_manager: ConfigManager, monkeypatch: pytest.MonkeyPatch):
+    def test_resolve_gateway_env_vars(
+        self, config_manager: ConfigManager,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
         monkeypatch.setenv("IGNITION_GATEWAY_URL", "https://env-gw:8043")
         monkeypatch.setenv("IGNITION_API_TOKEN", "env:token")
         resolved = config_manager.resolve_gateway()

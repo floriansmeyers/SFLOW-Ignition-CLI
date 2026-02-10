@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Generator
 
 import pytest
 
@@ -60,6 +59,16 @@ def mock_gateway_info() -> dict:
 def mock_modules() -> list[dict]:
     """Sample modules list."""
     return [
-        {"name": "Perspective", "id": "com.inductiveautomation.perspective", "version": "2.0.0", "state": "RUNNING"},
-        {"name": "Vision", "id": "com.inductiveautomation.vision", "version": "5.0.0", "state": "RUNNING"},
+        {
+            "name": "Perspective",
+            "id": "com.inductiveautomation.perspective",
+            "version": "2.0.0",
+            "state": "RUNNING",
+        },
+        {
+            "name": "Vision",
+            "id": "com.inductiveautomation.vision",
+            "version": "5.0.0",
+            "state": "RUNNING",
+        },
     ]

@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from rich.console import Console
-
 import httpx
+from rich.console import Console
 
 from ignition_cli.client.errors import IgnitionCLIError
 from ignition_cli.config.models import GatewayProfile
@@ -20,13 +19,13 @@ def watch_and_sync(
 ) -> None:
     """Watch a directory for changes and sync to the gateway project."""
     try:
-        from watchfiles import watch, Change
+        from watchfiles import Change, watch
     except ImportError:
         console.print(
             "[red]watchfiles is required for project watch. "
             "Install it with: pip install 'ignition-cli[watch]'[/]"
         )
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
     from ignition_cli.client.gateway import GatewayClient
 
@@ -46,7 +45,10 @@ def watch_and_sync(
                     try:
                         client.delete(f"/projects/{project_name}/resources/{rel_path}")
                     except (httpx.HTTPError, IgnitionCLIError) as exc:
-                        console.print(f"  [yellow]Warning: could not delete remote resource: {exc}[/]")
+                        console.print(
+                            "  [yellow]Warning: could not delete"
+                            f" remote resource: {exc}[/]"
+                        )
                 else:
                     file_path = Path(changed_path)
                     if file_path.is_file():
@@ -56,4 +58,7 @@ def watch_and_sync(
                                 content=file_path.read_bytes(),
                             )
                         except (httpx.HTTPError, IgnitionCLIError) as exc:
-                            console.print(f"  [yellow]Warning: could not sync resource: {exc}[/]")
+                            console.print(
+                                "  [yellow]Warning: could not"
+                                f" sync resource: {exc}[/]"
+                            )

@@ -20,8 +20,12 @@ class TestDeviceCommands:
     def test_list_devices(self):
         respx.get(f"{BASE}/{DEVICE_PATH}").mock(
             return_value=httpx.Response(200, json=[
-                {"name": "PLC1", "type": "Modbus TCP", "enabled": True, "state": "Connected", "hostname": "10.0.0.1"},
-                {"name": "PLC2", "type": "OPC-UA", "enabled": True, "state": "Faulted", "hostname": "10.0.0.2"},
+                {"name": "PLC1", "type": "Modbus TCP",
+                 "enabled": True, "state": "Connected",
+                 "hostname": "10.0.0.1"},
+                {"name": "PLC2", "type": "OPC-UA",
+                 "enabled": True, "state": "Faulted",
+                 "hostname": "10.0.0.2"},
             ])
         )
         result = runner.invoke(app, ["device", "list", "--url", GW, "--token", "k:s"])
@@ -37,16 +41,25 @@ class TestDeviceCommands:
                 {"name": "PLC2", "state": "Faulted"},
             ])
         )
-        result = runner.invoke(app, ["device", "list", "--status", "Faulted", "--url", GW, "--token", "k:s"])
+        result = runner.invoke(app, [
+            "device", "list", "--status", "Faulted",
+            "--url", GW, "--token", "k:s",
+        ])
         assert result.exit_code == 0
         assert "PLC2" in result.output
 
     @respx.mock
     def test_show_device(self):
         respx.get(f"{BASE}/{DEVICE_FIND}/PLC1").mock(
-            return_value=httpx.Response(200, json={"name": "PLC1", "type": "Modbus TCP", "hostname": "10.0.0.1"})
+            return_value=httpx.Response(200, json={
+                "name": "PLC1", "type": "Modbus TCP",
+                "hostname": "10.0.0.1",
+            })
         )
-        result = runner.invoke(app, ["device", "show", "PLC1", "--url", GW, "--token", "k:s"])
+        result = runner.invoke(app, [
+            "device", "show", "PLC1",
+            "--url", GW, "--token", "k:s",
+        ])
         assert result.exit_code == 0
         assert "PLC1" in result.output
 
@@ -54,9 +67,14 @@ class TestDeviceCommands:
     def test_device_status_deprecated(self):
         """device status is deprecated — delegates to show."""
         respx.get(f"{BASE}/{DEVICE_FIND}/PLC1").mock(
-            return_value=httpx.Response(200, json={"name": "PLC1", "state": "Connected"})
+            return_value=httpx.Response(200, json={
+                "name": "PLC1", "state": "Connected",
+            })
         )
-        result = runner.invoke(app, ["device", "status", "PLC1", "--url", GW, "--token", "k:s"])
+        result = runner.invoke(app, [
+            "device", "status", "PLC1",
+            "--url", GW, "--token", "k:s",
+        ])
         assert result.exit_code == 0
         assert "PLC1" in result.output
 
@@ -67,10 +85,17 @@ class TestDeviceCommands:
         respx.get(f"{BASE}/{DEVICE_FIND}/PLC1").mock(
             return_value=httpx.Response(200, json=device_data)
         )
-        put_route = respx.put(f"{BASE}/resources/com.inductiveautomation.opcua/device").mock(
+        put_url = (
+            f"{BASE}/resources/"
+            "com.inductiveautomation.opcua/device"
+        )
+        put_route = respx.put(put_url).mock(
             return_value=httpx.Response(200, json={"status": "ok"})
         )
-        result = runner.invoke(app, ["device", "restart", "PLC1", "--url", GW, "--token", "k:s"])
+        result = runner.invoke(app, [
+            "device", "restart", "PLC1",
+            "--url", GW, "--token", "k:s",
+        ])
         assert result.exit_code == 0
         assert "restarted" in result.output.lower()
         assert put_route.call_count == 2

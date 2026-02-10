@@ -19,7 +19,9 @@ class TestResourceList:
     def test_list_resources(self):
         respx.get(f"{BASE}/resources/list/ignition/database-connection").mock(
             return_value=httpx.Response(200, json=[
-                {"name": "db1", "type": "ignition/database-connection", "state": "Running"},
+                {"name": "db1",
+                 "type": "ignition/database-connection",
+                 "state": "Running"},
             ])
         )
         result = runner.invoke(app, [
@@ -67,7 +69,9 @@ class TestResourceUpdate:
     @respx.mock
     def test_update_auto_fetches_signature(self):
         respx.get(f"{BASE}/resources/find/ignition/database-connection/db1").mock(
-            return_value=httpx.Response(200, json={"name": "db1", "signature": "sig456"})
+            return_value=httpx.Response(200, json={
+                "name": "db1", "signature": "sig456",
+            })
         )
         respx.put(f"{BASE}/resources/ignition/database-connection").mock(
             return_value=httpx.Response(200, json={})
@@ -96,7 +100,9 @@ class TestResourceDelete:
     @respx.mock
     def test_delete_with_auto_signature(self):
         respx.get(f"{BASE}/resources/find/ignition/database-connection/db1").mock(
-            return_value=httpx.Response(200, json={"name": "db1", "signature": "sig123"})
+            return_value=httpx.Response(200, json={
+                "name": "db1", "signature": "sig123",
+            })
         )
         respx.delete(f"{BASE}/resources/ignition/database-connection/db1/sig123").mock(
             return_value=httpx.Response(200, json={})

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -78,10 +78,10 @@ def show(
 @error_handler
 def create(
     name: Annotated[str, typer.Argument(help="Mode name")],
-    title: Annotated[Optional[str], typer.Option(
+    title: Annotated[str | None, typer.Option(
         "--title", "-t", help="Short title for the mode",
     )] = None,
-    description: Annotated[Optional[str], typer.Option(
+    description: Annotated[str | None, typer.Option(
         "--description", "-d", help="Mode description",
     )] = None,
     gateway: GatewayOpt = None,
@@ -105,13 +105,13 @@ def create(
 @error_handler
 def update(
     name: Annotated[str, typer.Argument(help="Mode name")],
-    new_name: Annotated[Optional[str], typer.Option(
+    new_name: Annotated[str | None, typer.Option(
         "--name", "-n", help="Rename the mode",
     )] = None,
-    title: Annotated[Optional[str], typer.Option(
+    title: Annotated[str | None, typer.Option(
         "--title", "-t", help="Short title for the mode",
     )] = None,
-    description: Annotated[Optional[str], typer.Option(
+    description: Annotated[str | None, typer.Option(
         "--description", "-d", help="Mode description",
     )] = None,
     gateway: GatewayOpt = None,

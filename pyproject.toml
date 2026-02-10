@@ -54,6 +54,9 @@ Repository = "https://github.com/SFLOW-Ignition-CLI/ignition-cli"
 [tool.hatch.build.targets.wheel]
 packages = ["src/ignition_cli"]
 
+[tool.hatch.build.targets.sdist]
+exclude = [".venv", "*.gwbk", "*.json", "dist", ".git"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [

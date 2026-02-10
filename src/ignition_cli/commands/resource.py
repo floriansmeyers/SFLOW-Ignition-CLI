@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -28,7 +28,10 @@ from ignition_cli.commands._common import (
 )
 from ignition_cli.output.formatter import output
 
-app = typer.Typer(name="resource", help="Generic CRUD for gateway resources (use module/type format).")
+app = typer.Typer(
+    name="resource",
+    help="Generic CRUD for gateway resources (use module/type format).",
+)
 console = Console()
 
 
@@ -47,7 +50,12 @@ def _validate_resource_type(resource_type: str) -> tuple[str, str]:
 @app.command("list")
 @error_handler
 def list_resources(
-    resource_type: Annotated[str, typer.Argument(help="Resource type (e.g. ignition/database-connection)")],
+    resource_type: Annotated[
+        str,
+        typer.Argument(
+            help="Resource type (e.g. ignition/database-connection)"
+        ),
+    ],
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -59,14 +67,30 @@ def list_resources(
         data = client.get_json(f"/resources/list/{module}/{rtype}")
         items = extract_items(data, "resources")
         columns = ["Name", "Type", "State"]
-        rows = [[r.get("name", ""), r.get("type", resource_type), r.get("state", "")] for r in items]
-        output(data, fmt, columns=columns, rows=rows, title=f"Resources: {resource_type}")
+        rows = [
+            [
+                r.get("name", ""),
+                r.get("type", resource_type),
+                r.get("state", ""),
+            ]
+            for r in items
+        ]
+        output(
+            data, fmt,
+            columns=columns, rows=rows,
+            title=f"Resources: {resource_type}",
+        )
 
 
 @app.command()
 @error_handler
 def show(
-    resource_type: Annotated[str, typer.Argument(help="Resource type (e.g. ignition/database-connection)")],
+    resource_type: Annotated[
+        str,
+        typer.Argument(
+            help="Resource type (e.g. ignition/database-connection)"
+        ),
+    ],
     name: Annotated[str, typer.Argument(help="Resource name")],
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
@@ -89,9 +113,23 @@ def show(
 @app.command()
 @error_handler
 def create(
-    resource_type: Annotated[str, typer.Argument(help="Resource type (e.g. ignition/database-connection)")],
-    name: Annotated[str, typer.Option("--name", "-n", help="Resource name")],
-    config: Annotated[Optional[str], typer.Option("--config", "-c", help="JSON config string or @file path")] = None,
+    resource_type: Annotated[
+        str,
+        typer.Argument(
+            help="Resource type (e.g. ignition/database-connection)"
+        ),
+    ],
+    name: Annotated[
+        str,
+        typer.Option("--name", "-n", help="Resource name"),
+    ],
+    config: Annotated[
+        str | None,
+        typer.Option(
+            "--config", "-c",
+            help="JSON config string or @file path",
+        ),
+    ] = None,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -107,9 +145,20 @@ def create(
 @app.command()
 @error_handler
 def update(
-    resource_type: Annotated[str, typer.Argument(help="Resource type (e.g. ignition/database-connection)")],
+    resource_type: Annotated[
+        str,
+        typer.Argument(
+            help="Resource type (e.g. ignition/database-connection)"
+        ),
+    ],
     name: Annotated[str, typer.Argument(help="Resource name")],
-    config: Annotated[str, typer.Option("--config", "-c", help="JSON config string or @file path")],
+    config: Annotated[
+        str,
+        typer.Option(
+            "--config", "-c",
+            help="JSON config string or @file path",
+        ),
+    ],
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -136,10 +185,24 @@ def update(
 @app.command()
 @error_handler
 def delete(
-    resource_type: Annotated[str, typer.Argument(help="Resource type (e.g. ignition/database-connection)")],
+    resource_type: Annotated[
+        str,
+        typer.Argument(
+            help="Resource type (e.g. ignition/database-connection)"
+        ),
+    ],
     name: Annotated[str, typer.Argument(help="Resource name")],
-    force: Annotated[bool, typer.Option("--force", help="Skip confirmation")] = False,
-    signature: Annotated[Optional[str], typer.Option("--signature", "-s", help="Resource signature (auto-fetched if omitted)")] = None,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Skip confirmation"),
+    ] = False,
+    signature: Annotated[
+        str | None,
+        typer.Option(
+            "--signature", "-s",
+            help="Resource signature (auto-fetched if omitted)",
+        ),
+    ] = None,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -169,7 +232,12 @@ def delete(
 @app.command()
 @error_handler
 def names(
-    resource_type: Annotated[str, typer.Argument(help="Resource type (e.g. ignition/database-connection)")],
+    resource_type: Annotated[
+        str,
+        typer.Argument(
+            help="Resource type (e.g. ignition/database-connection)"
+        ),
+    ],
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -186,13 +254,19 @@ def names(
 @app.command()
 @error_handler
 def upload(
-    resource_type: Annotated[str, typer.Argument(help="Resource type (e.g. com.inductiveautomation.perspective/themes)")],
+    resource_type: Annotated[
+        str,
+        typer.Argument(
+            help="Resource type"
+            " (e.g. com.inductiveautomation.perspective/themes)"
+        ),
+    ],
     name: Annotated[str, typer.Argument(help="Resource name")],
     file_path: Annotated[Path, typer.Argument(help="Local file to upload")],
-    signature: Annotated[Optional[str], typer.Option(
+    signature: Annotated[str | None, typer.Option(
         "--signature", "-s", help="Resource signature (auto-fetched if omitted)",
     )] = None,
-    filename: Annotated[Optional[str], typer.Option(
+    filename: Annotated[str | None, typer.Option(
         "--filename", help="Remote filename (defaults to local basename)",
     )] = None,
     gateway: GatewayOpt = None,
@@ -219,17 +293,27 @@ def upload(
                 )
                 raise typer.Exit(1)
         path = f"/resources/datafile/{module}/{rtype}/{name}/{remote_name}"
-        client.put(path, content=file_path.read_bytes(), params={"signature": signature})
+        client.put(
+            path,
+            content=file_path.read_bytes(),
+            params={"signature": signature},
+        )
         console.print(f"[green]Uploaded '{remote_name}' to {resource_type}/{name}.[/]")
 
 
 @app.command()
 @error_handler
 def download(
-    resource_type: Annotated[str, typer.Argument(help="Resource type (e.g. com.inductiveautomation.perspective/themes)")],
+    resource_type: Annotated[
+        str,
+        typer.Argument(
+            help="Resource type"
+            " (e.g. com.inductiveautomation.perspective/themes)"
+        ),
+    ],
     name: Annotated[str, typer.Argument(help="Resource name")],
     filename: Annotated[str, typer.Argument(help="Remote filename to download")],
-    output_path: Annotated[Optional[Path], typer.Option(
+    output_path: Annotated[Path | None, typer.Option(
         "--output", "-o", help="Output file path",
     )] = None,
     gateway: GatewayOpt = None,
@@ -296,6 +380,6 @@ def _parse_config(config: str | None, name: str) -> dict:
             data = json.loads(config)
         except json.JSONDecodeError:
             console.print("[red]Invalid JSON config.[/]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
     data.setdefault("name", name)
     return data

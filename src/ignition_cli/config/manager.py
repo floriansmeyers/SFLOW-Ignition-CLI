@@ -8,7 +8,12 @@ from pathlib import Path
 import tomli_w
 
 from ignition_cli.client.errors import ConfigurationError
-from ignition_cli.config.constants import CONFIG_DIR, CONFIG_FILE, ENV_API_TOKEN, ENV_GATEWAY_PROFILE, ENV_GATEWAY_URL
+from ignition_cli.config.constants import (
+    CONFIG_FILE,
+    ENV_API_TOKEN,
+    ENV_GATEWAY_PROFILE,
+    ENV_GATEWAY_URL,
+)
 from ignition_cli.config.models import CLIConfig, GatewayProfile
 
 try:
@@ -103,7 +108,10 @@ class ConfigManager:
         url: str | None = None,
         token: str | None = None,
     ) -> GatewayProfile:
-        """Resolve gateway connection with precedence: CLI flags > env vars > config profile."""
+        """Resolve gateway connection.
+
+        Precedence: CLI flags > env vars > config profile.
+        """
         # Start from config profile
         env_profile = os.environ.get(ENV_GATEWAY_PROFILE)
         profile = self.get_profile(profile_name or env_profile)

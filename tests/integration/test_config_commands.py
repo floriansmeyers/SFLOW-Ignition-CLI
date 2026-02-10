@@ -31,7 +31,10 @@ class TestConfigCommands:
 
     def test_add_and_list(self, tmp_path: Path):
         with _patch_manager(tmp_path):
-            result = runner.invoke(app, ["config", "add", "dev", "--url", "https://gw:8043", "--token", "k:s"])
+            result = runner.invoke(app, [
+                "config", "add", "dev",
+                "--url", "https://gw:8043", "--token", "k:s",
+            ])
             assert result.exit_code == 0
             assert "added" in result.output
 
@@ -41,7 +44,11 @@ class TestConfigCommands:
 
     def test_show_profile(self, tmp_path: Path):
         with _patch_manager(tmp_path):
-            runner.invoke(app, ["config", "add", "dev", "--url", "https://gw:8043", "--token", "longtoken:secret"])
+            runner.invoke(app, [
+                "config", "add", "dev",
+                "--url", "https://gw:8043",
+                "--token", "longtoken:secret",
+            ])
             result = runner.invoke(app, ["config", "show", "dev"])
             assert result.exit_code == 0
             assert "dev" in result.output
@@ -75,7 +82,10 @@ class TestConfigCommands:
 
     def test_list_json_format(self, tmp_path: Path):
         with _patch_manager(tmp_path):
-            runner.invoke(app, ["config", "add", "dev", "--url", "https://gw:8043", "--token", "k:s"])
+            runner.invoke(app, [
+                "config", "add", "dev",
+                "--url", "https://gw:8043", "--token", "k:s",
+            ])
             result = runner.invoke(app, ["config", "list", "--format", "json"])
             assert result.exit_code == 0
             assert "profiles" in result.output

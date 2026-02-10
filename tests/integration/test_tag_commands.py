@@ -34,7 +34,10 @@ class TestTagCommands:
         respx.get(f"{BASE}/tags/export").mock(
             return_value=httpx.Response(200, json=[{"name": "T1"}])
         )
-        result = runner.invoke(app, ["tag", "browse", "-f", "json", "--url", GW, "--token", "k:s"])
+        result = runner.invoke(app, [
+            "tag", "browse", "-f", "json",
+            "--url", GW, "--token", "k:s",
+        ])
         assert result.exit_code == 0
         assert "T1" in result.output
 
@@ -42,10 +45,15 @@ class TestTagCommands:
     def test_read(self):
         respx.post(f"{BASE}/tags/read").mock(
             return_value=httpx.Response(200, json=[
-                {"path": "Tag1", "value": 42, "quality": "Good", "timestamp": "2024-01-01T00:00:00Z"},
+                {"path": "Tag1", "value": 42,
+                 "quality": "Good",
+                 "timestamp": "2024-01-01T00:00:00Z"},
             ])
         )
-        result = runner.invoke(app, ["tag", "read", "Tag1", "--url", GW, "--token", "k:s"])
+        result = runner.invoke(app, [
+            "tag", "read", "Tag1",
+            "--url", GW, "--token", "k:s",
+        ])
         assert result.exit_code == 0
         assert "42" in result.output
         assert "Warning" in result.output
@@ -55,7 +63,10 @@ class TestTagCommands:
         respx.post(f"{BASE}/tags/write").mock(
             return_value=httpx.Response(200, json={"success": True})
         )
-        result = runner.invoke(app, ["tag", "write", "Tag1", "100", "--url", GW, "--token", "k:s"])
+        result = runner.invoke(app, [
+            "tag", "write", "Tag1", "100",
+            "--url", GW, "--token", "k:s",
+        ])
         assert result.exit_code == 0
         assert "Wrote" in result.output
         assert "Warning" in result.output
@@ -75,7 +86,10 @@ class TestTagCommands:
             return_value=httpx.Response(200, json={"tags": [{"name": "T1"}]})
         )
         out = str(tmp_path / "tags.json")
-        result = runner.invoke(app, ["tag", "export", "-o", out, "--url", GW, "--token", "k:s"])
+        result = runner.invoke(app, [
+            "tag", "export", "-o", out,
+            "--url", GW, "--token", "k:s",
+        ])
         assert result.exit_code == 0
         assert "exported" in result.output
 
@@ -86,7 +100,10 @@ class TestTagCommands:
         respx.post(f"{BASE}/tags/import").mock(
             return_value=httpx.Response(200, json={"success": True})
         )
-        result = runner.invoke(app, ["tag", "import", str(tag_file), "--url", GW, "--token", "k:s"])
+        result = runner.invoke(app, [
+            "tag", "import", str(tag_file),
+            "--url", GW, "--token", "k:s",
+        ])
         assert result.exit_code == 0
         assert "imported" in result.output
 

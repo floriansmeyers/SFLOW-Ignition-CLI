@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -29,7 +29,7 @@ def _parse_body(data: str | None) -> dict | None:
         return json.loads(data)
     except json.JSONDecodeError:
         console.print("[red]Invalid JSON body.[/]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 
 @app.command("get")
@@ -44,7 +44,8 @@ def api_get(
     """Send a GET request to a gateway API endpoint."""
     with make_client(gateway, url, token) as client:
         resp = client.get(path)
-        data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else resp.text
+        ct = resp.headers.get("content-type", "")
+        data = resp.json() if ct.startswith("application/json") else resp.text
         output(data, fmt, kv=isinstance(data, dict))
 
 
@@ -52,7 +53,7 @@ def api_get(
 @error_handler
 def api_post(
     path: Annotated[str, typer.Argument(help="API path")],
-    body: Annotated[Optional[str], typer.Option("--data", "-d", help="JSON body")] = None,
+    body: Annotated[str | None, typer.Option("--data", "-d", help="JSON body")] = None,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -62,7 +63,8 @@ def api_post(
     json_body = _parse_body(body)
     with make_client(gateway, url, token) as client:
         resp = client.post(path, json=json_body)
-        data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else resp.text
+        ct = resp.headers.get("content-type", "")
+        data = resp.json() if ct.startswith("application/json") else resp.text
         output(data, fmt, kv=isinstance(data, dict))
 
 
@@ -70,7 +72,7 @@ def api_post(
 @error_handler
 def api_put(
     path: Annotated[str, typer.Argument(help="API path")],
-    body: Annotated[Optional[str], typer.Option("--data", "-d", help="JSON body")] = None,
+    body: Annotated[str | None, typer.Option("--data", "-d", help="JSON body")] = None,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -80,7 +82,8 @@ def api_put(
     json_body = _parse_body(body)
     with make_client(gateway, url, token) as client:
         resp = client.put(path, json=json_body)
-        data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else resp.text
+        ct = resp.headers.get("content-type", "")
+        data = resp.json() if ct.startswith("application/json") else resp.text
         output(data, fmt, kv=isinstance(data, dict))
 
 
@@ -99,15 +102,22 @@ def api_delete(
         if resp.status_code == 204:
             console.print("[green]Deleted.[/]")
         else:
-            data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else resp.text
+            ct = resp.headers.get("content-type", "")
+            data = resp.json() if ct.startswith("application/json") else resp.text
             output(data, fmt, kv=isinstance(data, dict))
 
 
 @app.command("discover")
 @error_handler
 def api_discover(
-    filter_path: Annotated[Optional[str], typer.Option("--filter", help="Filter endpoints by path")] = None,
-    method: Annotated[Optional[str], typer.Option("--method", "-m", help="Filter by HTTP method")] = None,
+    filter_path: Annotated[
+        str | None,
+        typer.Option("--filter", help="Filter endpoints by path"),
+    ] = None,
+    method: Annotated[
+        str | None,
+        typer.Option("--method", "-m", help="Filter by HTTP method"),
+    ] = None,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -139,7 +149,10 @@ def api_discover(
 @app.command("spec")
 @error_handler
 def api_spec(
-    output_file: Annotated[Optional[str], typer.Option("--output", "-o", help="Save spec to file")] = None,
+    output_file: Annotated[
+        str | None,
+        typer.Option("--output", "-o", help="Save spec to file"),
+    ] = None,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,

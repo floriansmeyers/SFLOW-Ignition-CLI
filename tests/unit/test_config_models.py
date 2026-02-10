@@ -12,7 +12,10 @@ class TestGatewayProfile:
         assert p.auth_configured is True
 
     def test_create_with_basic_auth(self):
-        p = GatewayProfile(name="test", url="https://gw:8043", username="admin", password="pass")
+        p = GatewayProfile(
+            name="test", url="https://gw:8043",
+            username="admin", password="pass",
+        )
         assert p.auth_configured is True
 
     def test_create_no_auth(self):

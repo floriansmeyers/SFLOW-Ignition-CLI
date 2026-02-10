@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -49,11 +49,26 @@ def init() -> None:
 def add(
     name: Annotated[str, typer.Argument(help="Profile name")],
     url: Annotated[str, typer.Option("--url", "-u", help="Gateway URL")],
-    token: Annotated[Optional[str], typer.Option("--token", "-t", help="API token")] = None,
-    username: Annotated[Optional[str], typer.Option("--username", help="Basic auth username")] = None,
-    password: Annotated[Optional[str], typer.Option("--password", help="Basic auth password")] = None,
-    no_verify_ssl: Annotated[bool, typer.Option("--no-verify-ssl", help="Disable SSL verification")] = False,
-    set_default: Annotated[bool, typer.Option("--default", help="Set as default profile")] = False,
+    token: Annotated[
+        str | None,
+        typer.Option("--token", "-t", help="API token"),
+    ] = None,
+    username: Annotated[
+        str | None,
+        typer.Option("--username", help="Basic auth username"),
+    ] = None,
+    password: Annotated[
+        str | None,
+        typer.Option("--password", help="Basic auth password"),
+    ] = None,
+    no_verify_ssl: Annotated[
+        bool,
+        typer.Option("--no-verify-ssl", help="Disable SSL verification"),
+    ] = False,
+    set_default: Annotated[
+        bool,
+        typer.Option("--default", help="Set as default profile"),
+    ] = False,
 ) -> None:
     """Add a gateway profile."""
     mgr = _get_manager()
@@ -80,7 +95,10 @@ def list_profiles(
     mgr = _get_manager()
     profiles = mgr.config.profiles
     if not profiles:
-        console.print("[yellow]No profiles configured. Run 'ignition-cli config init' to get started.[/]")
+        console.print(
+            "[yellow]No profiles configured."
+            " Run 'ignition-cli config init' to get started.[/]"
+        )
         return
 
     default = mgr.config.default_profile
@@ -141,7 +159,10 @@ def set_default(
 @app.command()
 @error_handler
 def test(
-    name: Annotated[Optional[str], typer.Argument(help="Profile name (uses default if omitted)")] = None,
+    name: Annotated[
+        str | None,
+        typer.Argument(help="Profile name (uses default if omitted)"),
+    ] = None,
 ) -> None:
     """Test connectivity to a gateway."""
     from ignition_cli.client.gateway import GatewayClient
@@ -152,14 +173,21 @@ def test(
 
     with GatewayClient(profile) as client:
         info = client.get_json("/gateway-info")
-        console.print(f"[green]Connected![/] Gateway: {info.get('name', 'Unknown')} v{info.get('version', '?')}")
+        gw_name = info.get('name', 'Unknown')
+        gw_ver = info.get('version', '?')
+        console.print(
+            f"[green]Connected![/] Gateway: {gw_name} v{gw_ver}"
+        )
 
 
 @app.command()
 @error_handler
 def remove(
     name: Annotated[str, typer.Argument(help="Profile name to remove")],
-    force: Annotated[bool, typer.Option("--force", "-f", help="Skip confirmation")] = False,
+    force: Annotated[
+        bool,
+        typer.Option("--force", "-f", help="Skip confirmation"),
+    ] = False,
 ) -> None:
     """Remove a gateway profile."""
     mgr = _get_manager()
@@ -167,10 +195,9 @@ def remove(
         console.print(f"[red]Profile '{name}' not found.[/]")
         raise typer.Exit(1)
 
-    if not force:
-        if not Confirm.ask(f"Remove profile '{name}'?"):
-            console.print("Cancelled.")
-            return
+    if not force and not Confirm.ask(f"Remove profile '{name}'?"):
+        console.print("Cancelled.")
+        return
 
     mgr.remove_profile(name)
     console.print(f"[green]Profile '{name}' removed.[/]")

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -57,7 +57,10 @@ def info(
 @app.command()
 @error_handler
 def backup(
-    output_file: Annotated[Optional[str], typer.Option("--output", "-o", help="Output file path")] = None,
+    output_file: Annotated[
+        str | None,
+        typer.Option("--output", "-o", help="Output file path"),
+    ] = None,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -99,7 +102,13 @@ def restore(
 @app.command()
 @error_handler
 def modules(
-    quarantined: Annotated[bool, typer.Option("--quarantined", "-q", help="Show quarantined modules instead")] = False,
+    quarantined: Annotated[
+        bool,
+        typer.Option(
+            "--quarantined", "-q",
+            help="Show quarantined modules instead",
+        ),
+    ] = False,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -111,7 +120,15 @@ def modules(
         data = client.get_json(endpoint)
         items = extract_items(data, "modules")
         columns = ["Name", "ID", "Version", "State"]
-        rows = [[m.get("name", ""), m.get("id", ""), m.get("version", ""), m.get("state", "")] for m in items]
+        rows = [
+            [
+                m.get("name", ""),
+                m.get("id", ""),
+                m.get("version", ""),
+                m.get("state", ""),
+            ]
+            for m in items
+        ]
         title = "Quarantined Modules" if quarantined else "Installed Modules"
         output(data, fmt, columns=columns, rows=rows, title=title)
 
@@ -119,8 +136,14 @@ def modules(
 @app.command()
 @error_handler
 def logs(
-    lines: Annotated[int, typer.Option("--lines", "-n", help="Number of log lines")] = 50,
-    level: Annotated[Optional[str], typer.Option("--level", "-l", help="Minimum log level")] = None,
+    lines: Annotated[
+        int,
+        typer.Option("--lines", "-n", help="Number of log lines"),
+    ] = 50,
+    level: Annotated[
+        str | None,
+        typer.Option("--level", "-l", help="Minimum log level"),
+    ] = None,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -135,7 +158,12 @@ def logs(
         items = extract_items(data, "logs")
         columns = ["Timestamp", "Level", "Logger", "Message"]
         rows = [
-            [e.get("timestamp", ""), e.get("level", ""), e.get("logger", ""), e.get("message", "")]
+            [
+                e.get("timestamp", ""),
+                e.get("level", ""),
+                e.get("logger", ""),
+                e.get("message", ""),
+            ]
             for e in items
         ]
         output(data, fmt, columns=columns, rows=rows, title="Gateway Logs")
@@ -144,7 +172,10 @@ def logs(
 @app.command("log-download")
 @error_handler
 def log_download(
-    output_file: Annotated[Optional[str], typer.Option("--output", "-o", help="Output file path")] = None,
+    output_file: Annotated[
+        str | None,
+        typer.Option("--output", "-o", help="Output file path"),
+    ] = None,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -171,7 +202,7 @@ def loggers(
         data = client.get_json("/logs/loggers")
         items = extract_items(data, "loggers")
         columns = ["Name", "Level"]
-        rows = [[l.get("name", ""), l.get("level", "")] for l in items]
+        rows = [[lg.get("name", ""), lg.get("level", "")] for lg in items]
         output(data, fmt, columns=columns, rows=rows, title="Loggers")
 
 
@@ -204,7 +235,10 @@ def scan_config(
 @app.command("entity-browse")
 @error_handler
 def entity_browse(
-    path: Annotated[Optional[str], typer.Option("--path", "-p", help="Entity path to browse")] = None,
+    path: Annotated[
+        str | None,
+        typer.Option("--path", "-p", help="Entity path to browse"),
+    ] = None,
     depth: Annotated[int, typer.Option("--depth", "-d", help="Browse depth")] = 1,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
