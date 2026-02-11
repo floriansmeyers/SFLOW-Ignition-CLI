@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
@@ -24,7 +24,9 @@ from ignition_cli.commands._common import (
     TokenOpt,
     UrlOpt,
     extract_items,
+    get_resource_data,
     make_client,
+    validate_resource_type,
 )
 from ignition_cli.output.formatter import output
 
@@ -37,14 +39,7 @@ console = Console()
 
 def _validate_resource_type(resource_type: str) -> tuple[str, str]:
     """Validate and split resource_type into (module, type)."""
-    if "/" not in resource_type:
-        console.print(
-            f"[red]Invalid resource type '{resource_type}'. "
-            "Use module/type format (e.g. ignition/database-connection).[/]"
-        )
-        raise typer.Exit(1)
-    parts = resource_type.split("/", 1)
-    return parts[0], parts[1]
+    return validate_resource_type(resource_type)
 
 
 @app.command("list")
@@ -91,23 +86,53 @@ def show(
             help="Resource type (e.g. ignition/database-connection)"
         ),
     ],
-    name: Annotated[str, typer.Argument(help="Resource name")],
+    name: Annotated[
+        str | None,
+        typer.Argument(
+            help="Resource name (omit for singleton resources)",
+        ),
+    ] = None,
+    collection: Annotated[
+        str | None,
+        typer.Option(
+            "--collection",
+            help="Deployment mode/collection to query",
+        ),
+    ] = None,
+    default_if_undefined: Annotated[
+        bool,
+        typer.Option(
+            "--default-if-undefined",
+            help="Return default config when singleton is undefined",
+        ),
+    ] = False,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
     fmt: FormatOpt = "table",
 ) -> None:
-    """Show resource configuration."""
+    """Show resource configuration.
+
+    Omit NAME for singleton resources (e.g. OPC UA server config).
+    """
     module, rtype = _validate_resource_type(resource_type)
+    params: dict[str, str] = {}
+    if collection:
+        params["collection"] = collection
+    if default_if_undefined:
+        params["defaultIfUndefined"] = "true"
     with make_client(gateway, url, token) as client:
-        data = client.get_json(f"/resources/find/{module}/{rtype}/{name}")
+        data = get_resource_data(
+            client, module, rtype, name, params=params or None,
+        )
         # Format files/data list for readability in table mode
         if fmt == "table" and isinstance(data, dict):
             for key in ("files", "data"):
                 if key in data and isinstance(data[key], list):
                     items = data[key]
                     data = {**data, key: ", ".join(items) if items else "(none)"}
-        output(data, fmt, kv=True, title=f"{resource_type}/{name}")
+        title = f"{resource_type}/{name}" if name else f"{resource_type} (singleton)"
+        output(data, fmt, kv=True, title=title)
 
 
 @app.command()
@@ -130,6 +155,13 @@ def create(
             help="JSON config string or @file path",
         ),
     ] = None,
+    collection: Annotated[
+        str | None,
+        typer.Option(
+            "--collection",
+            help="Target deployment mode/collection",
+        ),
+    ] = None,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -137,6 +169,8 @@ def create(
     """Create a new resource."""
     module, rtype = _validate_resource_type(resource_type)
     body = _parse_config(config, name)
+    if collection:
+        body["collection"] = collection
     with make_client(gateway, url, token) as client:
         client.post(f"/resources/{module}/{rtype}", json=[body])
         console.print(f"[green]Resource '{name}' ({resource_type}) created.[/]")
@@ -151,35 +185,63 @@ def update(
             help="Resource type (e.g. ignition/database-connection)"
         ),
     ],
-    name: Annotated[str, typer.Argument(help="Resource name")],
+    name: Annotated[
+        str | None,
+        typer.Argument(
+            help="Resource name (omit for singleton resources)",
+        ),
+    ] = None,
     config: Annotated[
         str,
         typer.Option(
             "--config", "-c",
             help="JSON config string or @file path",
         ),
-    ],
+    ] = ...,  # type: ignore[assignment]
+    collection: Annotated[
+        str | None,
+        typer.Option(
+            "--collection",
+            help="Target deployment mode/collection",
+        ),
+    ] = None,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
 ) -> None:
-    """Update an existing resource."""
+    """Update an existing resource.
+
+    Omit NAME for singleton resources (e.g. OPC UA server config).
+    """
     module, rtype = _validate_resource_type(resource_type)
     body = _parse_config(config, name)
+    if collection:
+        body["collection"] = collection
     with make_client(gateway, url, token) as client:
-        # Auto-fetch signature if not provided in config
-        if "signature" not in body:
-            data = client.get_json(f"/resources/find/{module}/{rtype}/{name}")
-            sig = data.get("signature")
-            if not sig:
-                console.print(
-                    f"[red]No signature found on resource '{name}'. "
-                    "Include 'signature' in config.[/]"
-                )
-                raise typer.Exit(1)
-            body["signature"] = sig
+        # Auto-fetch signature (and name for singletons) if not in config
+        if "signature" not in body or (not name and "name" not in body):
+            fetch_params: dict[str, str] = {}
+            if collection:
+                fetch_params["collection"] = collection
+            data = get_resource_data(
+                client, module, rtype, name,
+                params=fetch_params or None,
+            )
+            if "signature" not in body:
+                sig = data.get("signature")
+                if not sig:
+                    label = name or "(singleton)"
+                    console.print(
+                        f"[red]No signature found on resource '{label}'. "
+                        "Include 'signature' in config.[/]"
+                    )
+                    raise typer.Exit(1)
+                body["signature"] = sig
+            if not name and "name" not in body:
+                body["name"] = data.get("name", "")
         client.put(f"/resources/{module}/{rtype}", json=[body])
-        console.print(f"[green]Resource '{name}' ({resource_type}) updated.[/]")
+        label = name or body.get("name", "(singleton)")
+        console.print(f"[green]Resource '{label}' ({resource_type}) updated.[/]")
 
 
 @app.command()
@@ -203,6 +265,13 @@ def delete(
             help="Resource signature (auto-fetched if omitted)",
         ),
     ] = None,
+    collection: Annotated[
+        str | None,
+        typer.Option(
+            "--collection",
+            help="Deployment mode/collection (uses mode-specific signature)",
+        ),
+    ] = None,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -217,7 +286,13 @@ def delete(
     module, rtype = _validate_resource_type(resource_type)
     with make_client(gateway, url, token) as client:
         if not signature:
-            data = client.get_json(f"/resources/find/{module}/{rtype}/{name}")
+            params: dict[str, str] = {}
+            if collection:
+                params["collection"] = collection
+            data = client.get_json(
+                f"/resources/find/{module}/{rtype}/{name}",
+                params=params or None,
+            )
             signature = data.get("signature")
             if not signature:
                 console.print(
@@ -225,7 +300,14 @@ def delete(
                     "Provide one with --signature.[/]"
                 )
                 raise typer.Exit(1)
-        client.delete(f"/resources/{module}/{rtype}/{name}/{signature}")
+        delete_params: dict[str, str] = {}
+        if collection:
+            delete_params["collection"] = collection
+            delete_params["confirm"] = "true"
+        client.delete(
+            f"/resources/{module}/{rtype}/{name}/{signature}",
+            params=delete_params or None,
+        )
         console.print(f"[green]Resource '{name}' ({resource_type}) deleted.[/]")
 
 
@@ -293,9 +375,8 @@ def upload(
                 )
                 raise typer.Exit(1)
         path = f"/resources/datafile/{module}/{rtype}/{name}/{remote_name}"
-        client.put(
-            path,
-            content=file_path.read_bytes(),
+        client.stream_upload(
+            "PUT", path, file_path,
             params={"signature": signature},
         )
         console.print(f"[green]Uploaded '{remote_name}' to {resource_type}/{name}.[/]")
@@ -325,9 +406,7 @@ def download(
     dest = output_path or Path(filename)
     with make_client(gateway, url, token) as client:
         path = f"/resources/datafile/{module}/{rtype}/{name}/{filename}"
-        resp = client.get(path)
-        dest.write_bytes(resp.content)
-        size = len(resp.content)
+        size = client.stream_to_file(path, dest)
         console.print(
             f"[green]Downloaded '{filename}' to {dest}"
             f" ({size:,} bytes).[/]"
@@ -365,10 +444,13 @@ def types(
         console.print("[yellow]No resource types found in OpenAPI spec.[/]")
 
 
-def _parse_config(config: str | None, name: str) -> dict:
+def _parse_config(config: str | None, name: str | None) -> dict[str, Any]:
     """Parse config from JSON string or @file reference."""
     if not config:
-        return {"name": name}
+        body: dict[str, Any] = {}
+        if name:
+            body["name"] = name
+        return body
     if config.startswith("@"):
         file_path = Path(config[1:])
         if not file_path.exists():
@@ -381,5 +463,7 @@ def _parse_config(config: str | None, name: str) -> dict:
         except json.JSONDecodeError:
             console.print("[red]Invalid JSON config.[/]")
             raise typer.Exit(1) from None
-    data.setdefault("name", name)
-    return data
+    if name:
+        data.setdefault("name", name)
+    result: dict[str, Any] = data
+    return result

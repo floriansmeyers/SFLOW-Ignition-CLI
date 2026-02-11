@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class GatewayProfile(BaseModel):
@@ -16,7 +16,16 @@ class GatewayProfile(BaseModel):
     username: str | None = Field(default=None, description="Basic auth username")
     password: str | None = Field(default=None, description="Basic auth password")
     verify_ssl: bool = Field(default=True, description="Verify SSL certificates")
-    timeout: float = Field(default=30.0, description="Request timeout in seconds")
+    timeout: float = Field(
+        default=30.0, gt=0, le=600, description="Request timeout in seconds",
+    )
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, v: str) -> str:
+        if not v.startswith(("http://", "https://")):
+            raise ValueError("URL must start with http:// or https://")
+        return v.rstrip("/")
 
     @property
     def auth_configured(self) -> bool:

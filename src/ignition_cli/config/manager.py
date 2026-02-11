@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 
 import tomli_w
 
@@ -19,7 +20,7 @@ from ignition_cli.config.models import CLIConfig, GatewayProfile
 try:
     import tomllib
 except ModuleNotFoundError:
-    import tomli as tomllib  # type: ignore[no-redefine]
+    import tomli as tomllib
 
 
 class ConfigManager:
@@ -53,7 +54,7 @@ class ConfigManager:
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
         # Secure directory permissions (owner-only)
         os.chmod(self.config_path.parent, 0o700)
-        data: dict = {}
+        data: dict[str, Any] = {}
         if self.config.default_profile:
             data["default_profile"] = self.config.default_profile
         if self.config.default_format != "table":
@@ -68,9 +69,14 @@ class ConfigManager:
                 if prof_dict.get("timeout") == 30.0:
                     del prof_dict["timeout"]
                 data["profiles"][name] = prof_dict
-        self.config_path.write_bytes(tomli_w.dumps(data).encode())
-        # Secure file permissions (owner read/write only)
-        os.chmod(self.config_path, 0o600)
+        # Atomic write: write to temp file, then rename
+        temp = self.config_path.with_suffix(".tmp")
+        fd = os.open(str(temp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            os.write(fd, tomli_w.dumps(data).encode())
+        finally:
+            os.close(fd)
+        temp.rename(self.config_path)
 
     def add_profile(self, profile: GatewayProfile) -> None:
         self.config.profiles[profile.name] = profile

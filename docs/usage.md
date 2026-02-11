@@ -20,7 +20,7 @@ Complete reference for the `ignition-cli` command-line tool for Ignition SCADA 8
    - [tag](#tag) (6 commands)
    - [device](#device) (3 commands)
    - [resource](#resource) (9 commands)
-   - [mode](#mode) (5 commands)
+   - [mode](#mode) (7 commands)
    - [api](#api) (6 commands)
 8. [Common Workflows](#8-common-workflows)
 9. [Troubleshooting](#9-troubleshooting)
@@ -184,12 +184,12 @@ timeout = 60.0
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `url` | string | *(required)* | Gateway base URL (e.g. `https://gateway:8043`) |
+| `url` | string | *(required)* | Gateway base URL (must start with `http://` or `https://`) |
 | `token` | string | `null` | API token in `keyId:secretKey` format |
 | `username` | string | `null` | HTTP basic auth username |
 | `password` | string | `null` | HTTP basic auth password |
-| `verify_ssl` | boolean | `true` | Verify SSL/TLS certificates |
-| `timeout` | float | `30.0` | HTTP request timeout in seconds |
+| `verify_ssl` | boolean | `true` | Verify SSL/TLS certificates (prints warning when disabled) |
+| `timeout` | float | `30.0` | HTTP request timeout in seconds (range: 0–600) |
 
 Fields at their default values (`verify_ssl = true`, `timeout = 30.0`) are omitted from the config file to keep it clean.
 
@@ -501,7 +501,7 @@ $ ignition-cli config show production
 ├────────────┼──────────────────────────┤
 │ name       │ production               │
 │ url        │ https://prod:8043        │
-│ token      │ abc12345...              │
+│ token      │ ***                      │
 │ verify_ssl │ True                     │
 │ timeout    │ 30.0                     │
 └────────────┴──────────────────────────┘
@@ -677,10 +677,10 @@ ignition-cli gateway backup -o backups/prod-2025-01-15.gwbk
 
 #### gateway restore
 
-Restore a gateway from a backup file.
+Restore a gateway from a backup file. Prompts for confirmation unless `--force` is used. Uses streaming upload to handle large backup files without loading them entirely into memory.
 
 ```bash
-ignition-cli gateway restore <file> [--gateway <profile>] [--url <url>] [--token <token>]
+ignition-cli gateway restore <file> [--force] [--gateway <profile>] [--url <url>] [--token <token>]
 ```
 
 **Arguments:**
@@ -693,6 +693,7 @@ ignition-cli gateway restore <file> [--gateway <profile>] [--url <url>] [--token
 
 | Option | Short | Description |
 |---|---|---|
+| `--force` | | Skip confirmation prompt |
 | `--gateway` | `-g` | Gateway profile |
 | `--url` | | Gateway URL override |
 | `--token` | | API token override |
@@ -701,7 +702,10 @@ ignition-cli gateway restore <file> [--gateway <profile>] [--url <url>] [--token
 
 ```bash
 ignition-cli gateway restore backups/prod-2025-01-15.gwbk
+# Restore backup to gateway 'default'? This will overwrite the current configuration [y/N]: y
 # Backup restore initiated.
+
+ignition-cli gateway restore backups/prod-2025-01-15.gwbk --force
 ```
 
 ---
@@ -1078,10 +1082,10 @@ ignition-cli project export MyApp -o backups/MyApp-v2.zip
 
 #### project import
 
-Import a project from a `.zip` file.
+Import a project from a `.zip` file. When `--overwrite` is used, prompts for confirmation unless `--force` is also provided. Uses streaming upload to handle large project files without loading them entirely into memory.
 
 ```bash
-ignition-cli project import <file> [--name <name>] [--overwrite] [--gateway <profile>] [--url <url>] [--token <token>]
+ignition-cli project import <file> [--name <name>] [--overwrite] [--force] [--gateway <profile>] [--url <url>] [--token <token>]
 ```
 
 **Arguments:**
@@ -1096,6 +1100,7 @@ ignition-cli project import <file> [--name <name>] [--overwrite] [--gateway <pro
 |---|---|---|
 | `--name` | `-n` | Project name (defaults to the filename stem) |
 | `--overwrite` | | Overwrite if project already exists |
+| `--force` | | Skip confirmation when using `--overwrite` |
 | `--gateway` | `-g` | Gateway profile |
 | `--url` | | Gateway URL override |
 | `--token` | | API token override |
@@ -1106,7 +1111,7 @@ ignition-cli project import <file> [--name <name>] [--overwrite] [--gateway <pro
 ignition-cli project import MyApp.zip
 # Project 'MyApp' imported from MyApp.zip.
 
-ignition-cli project import MyApp.zip --name MyApp-Restored --overwrite
+ignition-cli project import MyApp.zip --name MyApp-Restored --overwrite --force
 ```
 
 ---
@@ -1603,10 +1608,10 @@ ignition-cli device show "PLC-Station1" -f json
 
 #### device restart
 
-Restart a device connection by toggling its enabled state (disable, wait, re-enable). Fetches the current resource, sets `enabled: false`, waits briefly, then sets `enabled: true`.
+Restart a device connection by toggling its enabled state (disable, wait, re-enable). Fetches the current resource, sets `enabled: false`, waits for the specified delay, then sets `enabled: true`.
 
 ```bash
-ignition-cli device restart <name> [--module <mod>] [--type <type>] [--gateway <profile>] [--url <url>] [--token <token>]
+ignition-cli device restart <name> [--delay <seconds>] [--module <mod>] [--type <type>] [--gateway <profile>] [--url <url>] [--token <token>]
 ```
 
 **Arguments:**
@@ -1619,6 +1624,7 @@ ignition-cli device restart <name> [--module <mod>] [--type <type>] [--gateway <
 
 | Option | Short | Description |
 |---|---|---|
+| `--delay` | | Seconds between disable and enable (default: `2.0`) |
 | `--module` | | Device module (default: `com.inductiveautomation.opcua`) |
 | `--type` | | Device type (default: `device`) |
 | `--gateway` | `-g` | Gateway profile |
@@ -1629,8 +1635,11 @@ ignition-cli device restart <name> [--module <mod>] [--type <type>] [--gateway <
 
 ```bash
 ignition-cli device restart "PLC-Station1"
-# Restarting device 'PLC-Station1'...
-# Device 'PLC-Station1' restarted.
+# Disabled 'PLC-Station1'...
+# Device 'PLC-Station1' restarted (toggled enabled state).
+
+# Longer delay for slower devices
+ignition-cli device restart "PLC-Station1" --delay 5
 ```
 
 ---
@@ -1682,10 +1691,10 @@ ignition-cli resource list ignition/tag-provider -f json
 
 #### resource show
 
-Show configuration for a specific resource.
+Show configuration for a specific resource. Omit `name` for singleton resources (gateway-level settings with exactly one instance per type).
 
 ```bash
-ignition-cli resource show <resource_type> <name> [--gateway <profile>] [--url <url>] [--token <token>] [--format <fmt>]
+ignition-cli resource show <resource_type> [name] [--collection <mode>] [--default-if-undefined] [--gateway <profile>] [--url <url>] [--token <token>] [--format <fmt>]
 ```
 
 **Arguments:**
@@ -1693,12 +1702,14 @@ ignition-cli resource show <resource_type> <name> [--gateway <profile>] [--url <
 | Argument | Description |
 |---|---|
 | `resource_type` | Resource type in `module/type` format |
-| `name` | Resource name |
+| `name` | Resource name (optional — omit for singleton resources) |
 
 **Options:**
 
 | Option | Short | Description |
 |---|---|---|
+| `--collection` | | Deployment mode/collection to query |
+| `--default-if-undefined` | | Return default config when singleton is undefined |
 | `--gateway` | `-g` | Gateway profile |
 | `--url` | | Gateway URL override |
 | `--token` | | API token override |
@@ -1707,7 +1718,15 @@ ignition-cli resource show <resource_type> <name> [--gateway <profile>] [--url <
 **Example:**
 
 ```bash
+# Named resource
 ignition-cli resource show ignition/database-connection "MySQL_Production"
+
+# Singleton resource (no name)
+ignition-cli resource show com.inductiveautomation.opcua/server-config
+
+# Singleton with collection and defaults
+ignition-cli resource show com.inductiveautomation.opcua/server-config \
+  --collection staging --default-if-undefined
 ```
 
 ---
@@ -1717,7 +1736,7 @@ ignition-cli resource show ignition/database-connection "MySQL_Production"
 Create a new resource. Configuration can be provided as an inline JSON string or loaded from a file using the `@` prefix.
 
 ```bash
-ignition-cli resource create <resource_type> --name <name> [--config <json>] [--gateway <profile>] [--url <url>] [--token <token>]
+ignition-cli resource create <resource_type> --name <name> [--config <json>] [--collection <mode>] [--gateway <profile>] [--url <url>] [--token <token>]
 ```
 
 **Arguments:**
@@ -1732,6 +1751,7 @@ ignition-cli resource create <resource_type> --name <name> [--config <json>] [--
 |---|---|---|
 | `--name` | `-n` | Resource name (required) |
 | `--config` | `-c` | JSON config string or `@file` path |
+| `--collection` | | Target deployment mode/collection |
 | `--gateway` | `-g` | Gateway profile |
 | `--url` | | Gateway URL override |
 | `--token` | | API token override |
@@ -1751,16 +1771,22 @@ ignition-cli resource create ignition/database-connection \
 
 # Minimal (name-only)
 ignition-cli resource create ignition/tag-provider --name "MyProvider"
+
+# Create with deployment mode collection
+ignition-cli resource create ignition/database-connection \
+  --name "MySQL_Staging" \
+  --collection staging \
+  --config '{"driver": "MySQL", "connectUrl": "jdbc:mysql://staging-db:3306/app"}'
 ```
 
 ---
 
 #### resource update
 
-Update an existing resource configuration. The resource signature (required by the API) is automatically fetched from the resource metadata.
+Update an existing resource configuration. The resource signature (required by the API) is automatically fetched from the resource metadata. Omit `name` for singleton resources.
 
 ```bash
-ignition-cli resource update <resource_type> <name> --config <json> [--gateway <profile>] [--url <url>] [--token <token>]
+ignition-cli resource update <resource_type> [name] --config <json> [--collection <mode>] [--gateway <profile>] [--url <url>] [--token <token>]
 ```
 
 **Arguments:**
@@ -1768,13 +1794,14 @@ ignition-cli resource update <resource_type> <name> --config <json> [--gateway <
 | Argument | Description |
 |---|---|
 | `resource_type` | Resource type in `module/type` format |
-| `name` | Resource name |
+| `name` | Resource name (optional — omit for singleton resources) |
 
 **Options:**
 
 | Option | Short | Description |
 |---|---|---|
 | `--config` | `-c` | JSON config string or `@file` path (required) |
+| `--collection` | | Target deployment mode/collection |
 | `--gateway` | `-g` | Gateway profile |
 | `--url` | | Gateway URL override |
 | `--token` | | API token override |
@@ -1787,6 +1814,14 @@ ignition-cli resource update ignition/database-connection "MySQL_Prod" \
 
 ignition-cli resource update ignition/database-connection "MySQL_Prod" \
   --config @updated-config.json
+
+# Update within a specific deployment mode
+ignition-cli resource update ignition/database-connection "MySQL_Prod" \
+  --config '{"maxConnections": 50}' --collection staging
+
+# Update a singleton resource (no name)
+ignition-cli resource update com.inductiveautomation.opcua/server-config \
+  --config '{"enabled": false}'
 ```
 
 ---
@@ -2155,6 +2190,83 @@ ignition-cli mode delete test-mode --force
 
 ---
 
+#### mode assign
+
+Assign a resource to a deployment mode. Fetches the existing resource configuration and creates a mode-specific config override. Omit `resource_name` for singleton resources.
+
+```bash
+ignition-cli mode assign <name> <resource_type> [resource_name] [--gateway <profile>] [--url <url>] [--token <token>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `name` | Mode name |
+| `resource_type` | Resource type in `module/type` format |
+| `resource_name` | Resource name (optional — omit for singleton resources) |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+
+**Example:**
+
+```bash
+# Assign a database connection to the staging mode
+ignition-cli mode assign staging ignition/database-connection Automotive
+# Resource 'Automotive' (ignition/database-connection) assigned to mode 'staging'.
+
+# Assign a singleton resource (no name)
+ignition-cli mode assign staging com.inductiveautomation.opcua/server-config
+
+# Verify the assignment
+ignition-cli mode list  # staging should show increased resource count
+```
+
+---
+
+#### mode unassign
+
+Remove a resource from a deployment mode. Fetches the resource signature and deletes the mode-specific config override. Omit `resource_name` for singleton resources.
+
+```bash
+ignition-cli mode unassign <name> <resource_type> [resource_name] [--gateway <profile>] [--url <url>] [--token <token>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `name` | Mode name |
+| `resource_type` | Resource type in `module/type` format |
+| `resource_name` | Resource name (optional — omit for singleton resources) |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+
+**Example:**
+
+```bash
+# Remove a database connection from the staging mode
+ignition-cli mode unassign staging ignition/database-connection Automotive
+# Resource 'Automotive' (ignition/database-connection) removed from mode 'staging'.
+
+# Remove a singleton resource from a mode (no name)
+ignition-cli mode unassign staging com.inductiveautomation.opcua/server-config
+```
+
+---
+
 ### api
 
 Raw API access and endpoint discovery. Use these commands to call arbitrary gateway API endpoints or explore the available API surface.
@@ -2421,8 +2533,8 @@ Export from one gateway and import to another:
 # Export from dev
 ignition-cli project export MyApp -o MyApp-export.zip --gateway dev
 
-# Import to staging
-ignition-cli project import MyApp-export.zip --overwrite --gateway staging
+# Import to staging (--force skips confirmation on overwrite)
+ignition-cli project import MyApp-export.zip --overwrite --force --gateway staging
 ```
 
 ### Project Watch for Development
@@ -2461,6 +2573,20 @@ Set up deployment modes for multi-environment configuration on a single gateway:
 ignition-cli mode create dev --title "Development" --description "Dev environment"
 ignition-cli mode create staging --title "Staging" --description "Pre-production"
 ignition-cli mode create prod --title "Production" --description "Live environment"
+
+# Assign resources to modes
+ignition-cli mode assign staging ignition/database-connection Automotive
+
+# Verify the assignment
+ignition-cli mode list  # staging should show Resources: 1
+
+# Or create a resource directly into a mode
+ignition-cli resource create ignition/database-connection \
+  --name "TestDB" --collection staging \
+  --config '{"driver":"MySQL ConnectorJ"}'
+
+# Remove a resource from a mode
+ignition-cli mode unassign staging ignition/database-connection Automotive
 
 # List modes
 ignition-cli mode list

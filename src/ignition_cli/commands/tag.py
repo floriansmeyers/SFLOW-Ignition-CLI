@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
@@ -25,7 +25,9 @@ app = typer.Typer(name="tag", help="Browse, read, write, and manage tags.")
 console = Console()
 
 
-def _build_tree(node_data: dict | list, tree: Tree, recursive: bool = False) -> None:
+def _build_tree(
+    node_data: dict[str, Any] | list[Any], tree: Tree, recursive: bool = False,
+) -> None:
     """Build a Rich tree from tag browse data."""
     items = extract_items(node_data, "tags")
     for item in items:

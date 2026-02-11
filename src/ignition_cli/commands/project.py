@@ -6,7 +6,7 @@ list, show, create, delete, export, import, diff, watch, resources.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
@@ -92,7 +92,7 @@ def create(
     token: TokenOpt = None,
 ) -> None:
     """Create a new project."""
-    body: dict = {"name": name}
+    body: dict[str, Any] = {"name": name}
     if title:
         body["title"] = title
     if description:
@@ -144,9 +144,7 @@ def export_project(
         console.print(f"[red]Directory does not exist: {dest.parent}[/]")
         raise typer.Exit(1)
     with make_client(gateway, url, token) as client:
-        resp = client.get(f"/projects/export/{name}")
-        dest.write_bytes(resp.content)
-        size = len(resp.content)
+        size = client.stream_to_file(f"/projects/export/{name}", dest)
         console.print(
             f"[green]Project '{name}' exported to"
             f" {dest}[/] ({size:,} bytes)"
@@ -168,6 +166,7 @@ def import_project(
         bool,
         typer.Option("--overwrite", help="Overwrite if exists"),
     ] = False,
+    force: Annotated[bool, typer.Option("--force", help="Skip confirmation")] = False,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -178,11 +177,20 @@ def import_project(
         console.print(f"[red]File not found: {file}[/]")
         raise typer.Exit(1)
     project_name = name or file_path.stem
+
+    if overwrite and not force:
+        from rich.prompt import Confirm
+
+        if not Confirm.ask(
+            f"Overwrite project '{project_name}' if it exists?"
+        ):
+            console.print("Cancelled.")
+            return
+
     with make_client(gateway, url, token) as client:
         params = {"overwrite": "true"} if overwrite else {}
-        client.post(
-            f"/projects/import/{project_name}",
-            content=file_path.read_bytes(),
+        client.stream_upload(
+            "POST", f"/projects/import/{project_name}", file_path,
             params=params,
             headers={"Content-Type": "application/zip"},
         )

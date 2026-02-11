@@ -28,7 +28,7 @@ ignition-cli gateway status
 | `tag` | Tag operations | `browse`, `read`\*, `write`\*, `export`, `import`, `providers` |
 | `device` | Device connections | `list`, `show`, `restart` (supports `--module`/`--type` for non-OPC-UA) |
 | `resource` | Generic resource CRUD | `list`, `show`, `create`, `update`, `delete`, `names`, `types`, `upload`, `download` |
-| `mode` | Deployment modes | `list`, `show`, `create`, `update`, `delete` |
+| `mode` | Deployment modes | `list`, `show`, `create`, `update`, `delete`, `assign`, `unassign` |
 | `api` | Raw API access | `get`, `post`, `put`, `delete`, `discover`, `spec` |
 
 \* Tag `read` and `write` are non-standard endpoints requiring a WebDev module or custom gateway extension.

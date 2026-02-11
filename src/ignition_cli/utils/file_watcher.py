@@ -30,35 +30,40 @@ def watch_and_sync(
     from ignition_cli.client.gateway import GatewayClient
 
     with GatewayClient(profile) as client:
-        for changes in watch(watch_dir):
-            for change_type, changed_path in changes:
-                rel_path = Path(changed_path).relative_to(watch_dir)
-                change_name = {
-                    Change.added: "added",
-                    Change.modified: "modified",
-                    Change.deleted: "deleted",
-                }.get(change_type, str(change_type))
+        try:
+            for changes in watch(watch_dir):
+                for change_type, changed_path in changes:
+                    rel_path = Path(changed_path).relative_to(watch_dir)
+                    change_name = {
+                        Change.added: "added",
+                        Change.modified: "modified",
+                        Change.deleted: "deleted",
+                    }.get(change_type, str(change_type))
 
-                console.print(f"  [dim]{change_name}:[/] {rel_path}")
+                    console.print(f"  [dim]{change_name}:[/] {rel_path}")
 
-                if change_type == Change.deleted:
-                    try:
-                        client.delete(f"/projects/{project_name}/resources/{rel_path}")
-                    except (httpx.HTTPError, IgnitionCLIError) as exc:
-                        console.print(
-                            "  [yellow]Warning: could not delete"
-                            f" remote resource: {exc}[/]"
-                        )
-                else:
-                    file_path = Path(changed_path)
-                    if file_path.is_file():
+                    if change_type == Change.deleted:
                         try:
-                            client.put(
-                                f"/projects/{project_name}/resources/{rel_path}",
-                                content=file_path.read_bytes(),
+                            client.delete(
+                                f"/projects/{project_name}/resources/{rel_path}"
                             )
                         except (httpx.HTTPError, IgnitionCLIError) as exc:
                             console.print(
-                                "  [yellow]Warning: could not"
-                                f" sync resource: {exc}[/]"
+                                "  [yellow]Warning: could not delete"
+                                f" remote resource: {exc}[/]"
                             )
+                    else:
+                        file_path = Path(changed_path)
+                        if file_path.is_file():
+                            try:
+                                client.put(
+                                    f"/projects/{project_name}/resources/{rel_path}",
+                                    content=file_path.read_bytes(),
+                                )
+                            except (httpx.HTTPError, IgnitionCLIError) as exc:
+                                console.print(
+                                    "  [yellow]Warning: could not"
+                                    f" sync resource: {exc}[/]"
+                                )
+        except KeyboardInterrupt:
+            console.print("\n[dim]Watch stopped.[/]")

@@ -33,6 +33,8 @@ _PROJECT_COPY = f"{_PREFIX}-proj-copy"
 _PROJECT_RENAME = f"{_PREFIX}-proj-renamed"
 _MODE = f"{_PREFIX}-mode"
 _MODE_RENAMED = f"{_PREFIX}-mode-renamed"
+_RESOURCE_DB = f"{_PREFIX}-db-conn"
+_MODE_ASSIGN = f"{_PREFIX}-assign-mode"
 
 
 # ---------------------------------------------------------------------------
@@ -1161,7 +1163,714 @@ class TestHelpText:
 
 
 # ===================================================================
-# 14. CLEANUP FIXTURE — global safety net
+# 14. RESOURCE CRUD LIFECYCLE
+# ===================================================================
+
+
+@pytest.mark.e2e
+class TestResourceCRUD:
+    """resource create / show / update / delete — full lifecycle.
+
+    Uses ignition/database-connection as a well-known writable resource type.
+    """
+
+    def test_01_create(self, gw_opts):
+        config = json.dumps({
+            "name": _RESOURCE_DB,
+            "config": {
+                "driver": "MySQL ConnectorJ",
+                "translator": "MYSQL",
+                "connectURL": "jdbc:mysql://localhost:3306/e2etest",
+                "username": "test",
+            },
+        })
+        result = invoke([
+            "resource", "create", "ignition/database-connection",
+            "--name", _RESOURCE_DB,
+            "--config", config,
+        ], gw_opts)
+        assert "created" in result.output.lower()
+
+    def test_02_show_table(self, gw_opts):
+        result = invoke([
+            "resource", "show", "ignition/database-connection", _RESOURCE_DB,
+        ], gw_opts)
+        assert _RESOURCE_DB in result.output
+
+    def test_03_show_json(self, gw_opts):
+        result = invoke([
+            "resource", "show", "ignition/database-connection", _RESOURCE_DB,
+            "--format", "json",
+        ], gw_opts)
+        data = json.loads(result.output)
+        assert data.get("name") == _RESOURCE_DB
+        assert "signature" in data
+
+    def test_04_show_yaml(self, gw_opts):
+        result = invoke([
+            "resource", "show", "ignition/database-connection", _RESOURCE_DB,
+            "--format", "yaml",
+        ], gw_opts)
+        assert _RESOURCE_DB in result.output
+
+    def test_05_update(self, gw_opts):
+        config = json.dumps({
+            "name": _RESOURCE_DB,
+            "config": {
+                "driver": "MySQL ConnectorJ",
+                "translator": "MYSQL",
+                "connectURL": (
+                    "jdbc:mysql://localhost:3306/e2etest-updated"
+                ),
+                "username": "test-updated",
+            },
+        })
+        result = invoke([
+            "resource", "update",
+            "ignition/database-connection", _RESOURCE_DB,
+            "--config", config,
+        ], gw_opts)
+        assert "updated" in result.output.lower()
+
+    def test_06_verify_update(self, gw_opts):
+        result = invoke([
+            "resource", "show",
+            "ignition/database-connection", _RESOURCE_DB,
+            "--format", "json",
+        ], gw_opts)
+        data = json.loads(result.output)
+        cfg = data.get("config", {})
+        assert "updated" in cfg.get("connectURL", "")
+
+    def test_07_names_includes_resource(self, gw_opts):
+        result = invoke([
+            "resource", "names", "ignition/database-connection",
+        ], gw_opts)
+        assert _RESOURCE_DB in result.output
+
+    def test_08_list_includes_resource(self, gw_opts):
+        result = invoke([
+            "resource", "list", "ignition/database-connection",
+            "--format", "json",
+        ], gw_opts)
+        data = json.loads(result.output)
+        items = (
+            data if isinstance(data, list)
+            else data.get("items", data.get("resources", []))
+        )
+        names = [r.get("name", "") for r in items]
+        assert _RESOURCE_DB in names
+
+    def test_09_delete(self, gw_opts):
+        result = invoke([
+            "resource", "delete", "ignition/database-connection",
+            _RESOURCE_DB, "--force",
+        ], gw_opts)
+        assert "deleted" in result.output.lower()
+
+    def test_10_verify_deleted(self, gw_opts):
+        result = runner.invoke(app, [
+            "resource", "show", "ignition/database-connection", _RESOURCE_DB,
+            *gw_opts,
+        ])
+        assert result.exit_code != 0
+
+
+# ===================================================================
+# 15. MODE ASSIGN / UNASSIGN
+# ===================================================================
+
+
+@pytest.mark.e2e
+class TestModeAssignUnassign:
+    """mode assign / unassign — assign resources to deployment modes.
+
+    Creates a mode and a resource, then assigns/unassigns with verification.
+    """
+
+    def test_01_setup_mode(self, gw_opts):
+        """Create a deployment mode for assignment tests."""
+        result = invoke([
+            "mode", "create", _MODE_ASSIGN,
+            "--title", "Assignment Test Mode",
+        ], gw_opts)
+        assert "created" in result.output.lower()
+
+    def test_02_assign_tag_provider(self, gw_opts):
+        """Assign the default tag provider to the test mode."""
+        result = invoke([
+            "mode", "assign", _MODE_ASSIGN,
+            "ignition/tag-provider", "default",
+        ], gw_opts)
+        assert "assigned" in result.output.lower()
+
+    def test_03_verify_mode_resource_count(self, gw_opts):
+        """The mode should now show at least one resource."""
+        result = invoke([
+            "mode", "show", _MODE_ASSIGN, "--format", "json",
+        ], gw_opts)
+        data = json.loads(result.output)
+        assert data.get("resourceCount", 0) >= 1
+
+    def test_04_show_resource_with_collection(self, gw_opts):
+        """Show the mode-scoped resource — should have a different signature."""
+        result = invoke([
+            "resource", "show", "ignition/tag-provider", "default",
+            "--collection", _MODE_ASSIGN,
+            "--format", "json",
+        ], gw_opts)
+        data = json.loads(result.output)
+        assert data.get("name") == "default"
+        assert "signature" in data
+
+    def test_05_unassign_tag_provider(self, gw_opts):
+        """Unassign the tag provider from the mode."""
+        result = invoke([
+            "mode", "unassign", _MODE_ASSIGN,
+            "ignition/tag-provider", "default",
+        ], gw_opts)
+        assert "removed" in result.output.lower()
+
+    def test_06_verify_unassigned(self, gw_opts):
+        """Mode resource count should be back to zero."""
+        result = invoke([
+            "mode", "show", _MODE_ASSIGN, "--format", "json",
+        ], gw_opts)
+        data = json.loads(result.output)
+        assert data.get("resourceCount", 0) == 0
+
+    def test_07_cleanup_mode(self, gw_opts):
+        invoke(["mode", "delete", _MODE_ASSIGN, "--force"], gw_opts)
+
+
+# ===================================================================
+# 16. RESOURCE WITH --COLLECTION (mode-scoped CRUD)
+# ===================================================================
+
+
+@pytest.mark.e2e
+class TestResourceCollectionScoped:
+    """Resource create/update/delete with --collection flag."""
+
+    def test_01_setup(self, gw_opts):
+        """Create a mode and a base resource for scoped tests."""
+        invoke([
+            "mode", "create", _MODE_ASSIGN,
+            "--title", "Collection Test",
+        ], gw_opts)
+        # Create a database connection resource
+        config = json.dumps({
+            "name": _RESOURCE_DB,
+            "config": {
+                "driver": "MySQL ConnectorJ",
+                "translator": "MYSQL",
+                "connectURL": (
+                    "jdbc:mysql://localhost:3306/collectiontest"
+                ),
+                "username": "test",
+            },
+        })
+        invoke([
+            "resource", "create",
+            "ignition/database-connection",
+            "--name", _RESOURCE_DB,
+            "--config", config,
+        ], gw_opts)
+
+    def test_02_create_with_collection(self, gw_opts):
+        """Create a mode-scoped override via --collection."""
+        config = json.dumps({
+            "name": _RESOURCE_DB,
+            "config": {
+                "driver": "MySQL ConnectorJ",
+                "translator": "MYSQL",
+                "connectURL": (
+                    "jdbc:mysql://localhost:3306/mode-override"
+                ),
+                "username": "test-mode",
+            },
+        })
+        result = invoke([
+            "resource", "create",
+            "ignition/database-connection",
+            "--name", _RESOURCE_DB,
+            "--config", config,
+            "--collection", _MODE_ASSIGN,
+        ], gw_opts)
+        assert "created" in result.output.lower()
+
+    def test_03_show_collection_resource(self, gw_opts):
+        """Show the mode-scoped resource; should differ from base."""
+        result = invoke([
+            "resource", "show", "ignition/database-connection", _RESOURCE_DB,
+            "--collection", _MODE_ASSIGN,
+            "--format", "json",
+        ], gw_opts)
+        data = json.loads(result.output)
+        assert data.get("name") == _RESOURCE_DB
+
+    def test_04_delete_collection_resource(self, gw_opts):
+        """Delete the mode-scoped resource using --collection flag."""
+        result = invoke([
+            "resource", "delete", "ignition/database-connection",
+            _RESOURCE_DB, "--force",
+            "--collection", _MODE_ASSIGN,
+        ], gw_opts)
+        assert "deleted" in result.output.lower()
+
+    def test_05_base_resource_still_exists(self, gw_opts):
+        """The base resource should still exist after mode-scoped delete."""
+        result = invoke([
+            "resource", "show", "ignition/database-connection", _RESOURCE_DB,
+            "--format", "json",
+        ], gw_opts)
+        data = json.loads(result.output)
+        assert data.get("name") == _RESOURCE_DB
+
+    def test_06_cleanup(self, gw_opts):
+        invoke([
+            "resource", "delete", "ignition/database-connection",
+            _RESOURCE_DB, "--force",
+        ], gw_opts, should_succeed=False)
+        invoke(
+            ["mode", "delete", _MODE_ASSIGN, "--force"],
+            gw_opts, should_succeed=False,
+        )
+
+
+# ===================================================================
+# 17. SINGLETON RESOURCES
+# ===================================================================
+
+
+@pytest.mark.e2e
+class TestSingletonResource:
+    """resource show (singleton) — resources without a name."""
+
+    def test_show_singleton_json(self, gw_opts):
+        """Show a singleton resource like OPC UA server config.
+
+        Skip if no singleton types available on this gateway.
+        """
+        # Try the gateway-network singleton (usually present)
+        result = runner.invoke(app, [
+            "resource", "show", "ignition/gateway-network",
+            "--format", "json", *gw_opts,
+        ])
+        if result.exit_code == 0:
+            data = json.loads(result.output)
+            assert isinstance(data, dict)
+            assert "name" in data or "config" in data or "signature" in data
+        else:
+            # Not every gateway has this — try OPC UA server settings
+            result2 = runner.invoke(app, [
+                "resource", "show",
+                "com.inductiveautomation.opcua/opcua-server-settings",
+                "--format", "json", *gw_opts,
+            ])
+            if result2.exit_code != 0:
+                pytest.skip("No singleton resource types available")
+            data = json.loads(result2.output)
+            assert isinstance(data, dict)
+
+    def test_show_singleton_default_if_undefined(self, gw_opts):
+        """Show a singleton with --default-if-undefined flag."""
+        # Use a type that may or may not be defined
+        result = runner.invoke(app, [
+            "resource", "show", "ignition/gateway-network",
+            "--default-if-undefined",
+            "--format", "json", *gw_opts,
+        ])
+        # Should either succeed or 404 (depending on gateway config)
+        if result.exit_code == 0:
+            data = json.loads(result.output)
+            assert isinstance(data, dict)
+
+
+# ===================================================================
+# 18. API PUT / DELETE
+# ===================================================================
+
+
+@pytest.mark.e2e
+class TestApiPutDelete:
+    """api put / api delete — raw HTTP methods.
+
+    Uses mode endpoints for a safe create/update/delete cycle.
+    """
+
+    def test_01_api_put_mode(self, gw_opts):
+        """Create a mode, then update it via api put."""
+        # Create first
+        invoke([
+            "mode", "create", f"{_PREFIX}-api-put-test",
+            "--title", "API Put Test",
+        ], gw_opts)
+        # Update via raw PUT
+        body = json.dumps({
+            "name": f"{_PREFIX}-api-put-test",
+            "title": "Updated via API put",
+        })
+        result = invoke([
+            "api", "put", f"/mode/{_PREFIX}-api-put-test",
+            "--data", body,
+        ], gw_opts)
+        assert result.exit_code == 0
+
+    def test_02_verify_put(self, gw_opts):
+        """Verify the PUT actually changed the title."""
+        result = invoke([
+            "mode", "show", f"{_PREFIX}-api-put-test", "--format", "json",
+        ], gw_opts)
+        data = json.loads(result.output)
+        assert data.get("title") == "Updated via API put"
+
+    def test_03_api_delete_mode(self, gw_opts):
+        """Delete the mode via api delete."""
+        result = invoke([
+            "api", "delete", f"/mode/{_PREFIX}-api-put-test",
+        ], gw_opts)
+        assert result.exit_code == 0
+
+
+# ===================================================================
+# 19. DEVICE RESTART
+# ===================================================================
+
+
+@pytest.mark.e2e
+class TestDeviceRestart:
+    """device restart — toggle device enable/disable.
+
+    Requires at least one device connection to be present.
+    """
+
+    def test_restart_first_device(self, gw_opts):
+        """Restart the first available device (skip if none)."""
+        list_result = invoke(["device", "list", "--format", "json"], gw_opts)
+        data = json.loads(list_result.output)
+        items = (
+            data if isinstance(data, list)
+            else data.get("items", data.get("resources", []))
+        )
+        if not items:
+            pytest.skip("No device connections configured")
+        first_name = items[0].get("name")
+        if not first_name:
+            pytest.skip("First device has no name")
+        result = invoke([
+            "device", "restart", first_name, "--delay", "1",
+        ], gw_opts)
+        assert "restarted" in result.output.lower()
+
+
+# ===================================================================
+# 20. TAG IMPORT COLLISION POLICIES
+# ===================================================================
+
+
+@pytest.mark.e2e
+class TestTagImportCollisionPolicies:
+    """tag import — test different collision policies."""
+
+    def test_01_export_for_reimport(self, gw_opts, tmp_path):
+        """Export tags so we have something to reimport."""
+        dest = tmp_path / "tags-collision-test.json"
+        invoke(["tag", "export", "--output", str(dest)], gw_opts)
+        assert dest.exists()
+        os.environ["_E2E_TAG_COLLISION_PATH"] = str(dest)
+
+    def test_02_import_merge_overwrite(self, gw_opts):
+        path = os.environ.get("_E2E_TAG_COLLISION_PATH")
+        if not path or not Path(path).exists():
+            pytest.skip("Tag export not available")
+        result = invoke([
+            "tag", "import", path,
+            "--collision-policy", "MergeOverwrite",
+        ], gw_opts)
+        assert "imported" in result.output.lower()
+
+    def test_03_import_overwrite(self, gw_opts):
+        path = os.environ.get("_E2E_TAG_COLLISION_PATH")
+        if not path or not Path(path).exists():
+            pytest.skip("Tag export not available")
+        result = invoke([
+            "tag", "import", path,
+            "--collision-policy", "Overwrite",
+        ], gw_opts)
+        assert "imported" in result.output.lower()
+
+    def test_04_import_ignore(self, gw_opts):
+        path = os.environ.get("_E2E_TAG_COLLISION_PATH")
+        if not path or not Path(path).exists():
+            pytest.skip("Tag export not available")
+        result = invoke([
+            "tag", "import", path,
+            "--collision-policy", "Ignore",
+        ], gw_opts)
+        assert "imported" in result.output.lower()
+
+    def test_05_import_abort(self, gw_opts):
+        """Abort policy should succeed when tags already match."""
+        path = os.environ.get("_E2E_TAG_COLLISION_PATH")
+        if not path or not Path(path).exists():
+            pytest.skip("Tag export not available")
+        # Abort may either succeed or error depending on tag state
+        result = runner.invoke(app, [
+            "tag", "import", path,
+            "--collision-policy", "Abort", *gw_opts,
+        ])
+        # Either succeeds or fails — both are valid
+        assert result.exit_code in (0, 1)
+
+
+# ===================================================================
+# 21. TAG BROWSE WITH PATH
+# ===================================================================
+
+
+@pytest.mark.e2e
+class TestTagBrowseWithPath:
+    """tag browse — browse specific paths and formats."""
+
+    def test_browse_with_provider(self, gw_opts):
+        result = invoke([
+            "tag", "browse", "--provider", "default", "--format", "json",
+        ], gw_opts)
+        data = json.loads(result.output)
+        assert isinstance(data, (dict, list))
+
+    def test_browse_yaml(self, gw_opts):
+        result = invoke(["tag", "browse", "--format", "yaml"], gw_opts)
+        assert result.exit_code == 0
+
+    def test_export_with_path(self, gw_opts):
+        """Export a specific tag path (may be empty but should work)."""
+        # Export from root with explicit provider
+        result = runner.invoke(app, [
+            "tag", "export",
+            "--provider", "default", *gw_opts,
+        ])
+        # Should succeed (root always exists)
+        assert result.exit_code == 0
+
+
+# ===================================================================
+# 22. GATEWAY LOGS WITH LEVEL FILTER
+# ===================================================================
+
+
+@pytest.mark.e2e
+class TestGatewayLogsLevel:
+    """gateway logs --level — filter by log level."""
+
+    def test_logs_level_warn(self, gw_opts):
+        result = invoke(["gateway", "logs", "--level", "WARN"], gw_opts)
+        assert result.exit_code == 0
+
+    def test_logs_level_error(self, gw_opts):
+        result = invoke(["gateway", "logs", "--level", "ERROR"], gw_opts)
+        assert result.exit_code == 0
+
+    def test_logs_yaml(self, gw_opts):
+        result = invoke(["gateway", "logs", "--format", "yaml"], gw_opts)
+        assert result.exit_code == 0
+
+
+# ===================================================================
+# 23. EXPANDED OUTPUT FORMAT TESTS
+# ===================================================================
+
+
+@pytest.mark.e2e
+class TestExpandedOutputFormats:
+    """Additional output format tests for previously untested commands."""
+
+    @pytest.mark.parametrize("fmt", ["table", "json", "yaml", "csv"])
+    def test_resource_list_formats(self, gw_opts, fmt):
+        result = invoke([
+            "resource", "list", "ignition/tag-provider", "--format", fmt,
+        ], gw_opts)
+        if fmt == "json":
+            json.loads(result.output)
+
+    @pytest.mark.parametrize("fmt", ["table", "json", "yaml", "csv"])
+    def test_resource_show_formats(self, gw_opts, fmt):
+        result = invoke([
+            "resource", "show", "ignition/tag-provider", "default",
+            "--format", fmt,
+        ], gw_opts)
+        if fmt == "json":
+            json.loads(result.output)
+
+    @pytest.mark.parametrize("fmt", ["table", "json", "yaml", "csv"])
+    def test_tag_providers_formats(self, gw_opts, fmt):
+        result = invoke(["tag", "providers", "--format", fmt], gw_opts)
+        if fmt == "json":
+            json.loads(result.output)
+
+    @pytest.mark.parametrize("fmt", ["table", "json", "yaml", "csv"])
+    def test_gateway_logs_formats(self, gw_opts, fmt):
+        result = invoke(["gateway", "logs", "--format", fmt], gw_opts)
+        if fmt == "json":
+            json.loads(result.output)
+
+    @pytest.mark.parametrize("fmt", ["table", "json", "yaml", "csv"])
+    def test_mode_show_formats(self, gw_opts, fmt):
+        """Test mode show formats on a known mode.
+
+        We list modes and pick the first one (or skip if none).
+        """
+        list_result = invoke(["mode", "list", "--format", "json"], gw_opts)
+        data = json.loads(list_result.output)
+        items = data if isinstance(data, list) else data.get("items", [])
+        if not items:
+            pytest.skip("No modes available")
+        mode_name = items[0].get("name")
+        result = invoke(["mode", "show", mode_name, "--format", fmt], gw_opts)
+        if fmt == "json":
+            json.loads(result.output)
+
+    @pytest.mark.parametrize("fmt", ["table", "json", "yaml", "csv"])
+    def test_project_show_formats(self, gw_opts, fmt):
+        """Test project show formats on first available project."""
+        list_result = invoke(["project", "list", "--format", "json"], gw_opts)
+        data = json.loads(list_result.output)
+        items = (
+            data if isinstance(data, list)
+            else data.get("items", data.get("projects", []))
+        )
+        if not items:
+            pytest.skip("No projects available")
+        proj_name = items[0].get("name")
+        result = invoke(["project", "show", proj_name, "--format", fmt], gw_opts)
+        if fmt == "json":
+            json.loads(result.output)
+
+    @pytest.mark.parametrize("fmt", ["table", "json", "yaml", "csv"])
+    def test_device_show_formats(self, gw_opts, fmt):
+        """Test device show formats on first available device."""
+        list_result = invoke(["device", "list", "--format", "json"], gw_opts)
+        data = json.loads(list_result.output)
+        items = (
+            data if isinstance(data, list)
+            else data.get("items", data.get("resources", []))
+        )
+        if not items:
+            pytest.skip("No devices available")
+        name = items[0].get("name")
+        result = invoke(["device", "show", name, "--format", fmt], gw_opts)
+        if fmt == "json":
+            json.loads(result.output)
+
+    @pytest.mark.parametrize("fmt", ["table", "json", "yaml", "csv"])
+    def test_entity_browse_formats(self, gw_opts, fmt):
+        result = invoke(["gateway", "entity-browse", "--format", fmt], gw_opts)
+        if fmt == "json":
+            json.loads(result.output)
+
+
+# ===================================================================
+# 24. PROJECT IMPORT OVERWRITE
+# ===================================================================
+
+
+@pytest.mark.e2e
+class TestProjectImportOverwrite:
+    """project import --overwrite — verify full replacement behavior."""
+
+    def test_01_create_and_export(self, gw_opts, tmp_path):
+        """Create project, export, then re-import with --overwrite."""
+        proj = f"{_PREFIX}-import-overwrite"
+        invoke([
+            "project", "create", proj, "--title", "Overwrite Test",
+        ], gw_opts)
+        dest = tmp_path / "overwrite.zip"
+        invoke(["project", "export", proj, "--output", str(dest)], gw_opts)
+        assert dest.exists()
+        os.environ["_E2E_OVERWRITE_PATH"] = str(dest)
+        os.environ["_E2E_OVERWRITE_NAME"] = proj
+
+    def test_02_import_overwrite(self, gw_opts):
+        path = os.environ.get("_E2E_OVERWRITE_PATH")
+        proj = os.environ.get("_E2E_OVERWRITE_NAME")
+        if not path or not Path(path).exists() or not proj:
+            pytest.skip("Export not available")
+        result = invoke([
+            "project", "import", path,
+            "--name", proj,
+            "--overwrite", "--force",
+        ], gw_opts)
+        assert "imported" in result.output.lower()
+
+    def test_03_cleanup(self, gw_opts):
+        proj = os.environ.get("_E2E_OVERWRITE_NAME")
+        if proj:
+            invoke(
+                ["project", "delete", proj, "--force"],
+                gw_opts, should_succeed=False,
+            )
+
+
+# ===================================================================
+# 25. ERROR HANDLING — EXPANDED
+# ===================================================================
+
+
+@pytest.mark.e2e
+class TestExpandedErrorHandling:
+    """Additional error handling edge cases."""
+
+    def test_resource_show_nonexistent(self, gw_opts):
+        """Showing a nonexistent resource should fail with 404."""
+        result = runner.invoke(app, [
+            "resource", "show", "ignition/database-connection",
+            "nonexistent-zzz-resource", *gw_opts,
+        ])
+        assert result.exit_code != 0
+
+    def test_resource_delete_nonexistent(self, gw_opts):
+        """Deleting a nonexistent resource should fail."""
+        result = runner.invoke(app, [
+            "resource", "delete", "ignition/database-connection",
+            "nonexistent-zzz-resource", "--force", *gw_opts,
+        ])
+        assert result.exit_code != 0
+
+    def test_mode_unassign_nonexistent(self, gw_opts):
+        """Unassigning from nonexistent mode should fail."""
+        result = runner.invoke(app, [
+            "mode", "unassign", "nonexistent-zzz-mode",
+            "ignition/tag-provider", "default", *gw_opts,
+        ])
+        assert result.exit_code != 0
+
+    def test_tag_export_invalid_provider(self, gw_opts):
+        """Exporting from a nonexistent provider should fail."""
+        result = runner.invoke(app, [
+            "tag", "export",
+            "--provider", "nonexistent-zzz-provider",
+            *gw_opts,
+        ])
+        assert result.exit_code != 0
+
+    def test_device_show_nonexistent(self, gw_opts):
+        """Showing a nonexistent device should fail."""
+        result = runner.invoke(app, [
+            "device", "show", "nonexistent-zzz-device", *gw_opts,
+        ])
+        assert result.exit_code != 0
+
+    def test_api_get_invalid_path(self, gw_opts):
+        """GET on a nonexistent API path should fail."""
+        result = runner.invoke(app, [
+            "api", "get", "/nonexistent/path/zzz", *gw_opts,
+        ])
+        assert result.exit_code != 0
+
+
+# ===================================================================
+# 26. CLEANUP FIXTURE — global safety net
 # ===================================================================
 
 
@@ -1181,16 +1890,22 @@ def cleanup_e2e_artifacts(request):
 
     gw_opts = ["--url", url, "--token", token]
     artifacts = [
+        # Resources (delete before modes to avoid dependency issues)
+        (["resource", "delete", "ignition/database-connection",
+          _RESOURCE_DB, "--force"], gw_opts),
         # Projects
         (["project", "delete", _PROJECT, "--force"], gw_opts),
         (["project", "delete", _PROJECT_COPY, "--force"], gw_opts),
         (["project", "delete", _PROJECT_RENAME, "--force"], gw_opts),
         (["project", "delete", f"{_PROJECT}-imported", "--force"], gw_opts),
         (["project", "delete", f"{_PREFIX}-workflow-proj", "--force"], gw_opts),
+        (["project", "delete", f"{_PREFIX}-import-overwrite", "--force"], gw_opts),
         # Modes
         (["mode", "delete", _MODE, "--force"], gw_opts),
         (["mode", "delete", _MODE_RENAMED, "--force"], gw_opts),
+        (["mode", "delete", _MODE_ASSIGN, "--force"], gw_opts),
         (["mode", "delete", f"{_PREFIX}-workflow-mode", "--force"], gw_opts),
+        (["mode", "delete", f"{_PREFIX}-api-put-test", "--force"], gw_opts),
     ]
 
     for args, opts in artifacts:

@@ -25,7 +25,7 @@ src/ignition_cli/
 │   ├── errors.py       # Exception hierarchy, error_handler decorator
 │   └── gateway.py      # GatewayClient (HTTP, pagination, streaming, OpenAPI)
 ├── commands/
-│   ├── _common.py      # Shared helpers (make_client, extract_items, type aliases)
+│   ├── _common.py      # Shared helpers (make_client, extract_items, validate_resource_type, type aliases)
 │   ├── api.py          # Raw API access + discover/spec
 │   ├── config_cmd.py   # Profile management (init, add, test, etc.)
 │   ├── device.py       # Device list/show/restart (configurable module/type)
@@ -128,3 +128,9 @@ After every implementation task, always:
 - Tag import: `POST /tags/import?provider=X&type=json&collisionPolicy=MergeOverwrite` — `type` and `collisionPolicy` are **required**
 - Resource create/update: `POST/PUT /resources/{module}/{type}` expects a **JSON array** of objects, not a single object
 - Resource update (`PUT`) requires `signature` field in request body
+- Mode-scoped resources: `POST /resources/{module}/{type}` with `"collection": "mode_name"` in the body to assign a resource to a mode
+- Mode-scoped resource lookup: `GET /resources/find/{module}/{type}/{name}?collection=mode_name` — returns the mode-specific signature (different from the base resource signature)
+- Mode-scoped resource delete: `DELETE /resources/{module}/{type}/{name}/{signature}?collection=mode_name&confirm=true` — must use the mode-specific signature and `confirm=true` when references exist
+- Singleton resources: `GET /resources/singleton/{module}/{type}` — no name required; accepts `?collection=X` and `?defaultIfUndefined=true`
+- Singleton resources share the same `POST/PUT /resources/{module}/{type}` create/update endpoints as named resources
+- `resource show`, `resource update`, `mode assign`, `mode unassign` accept optional name — omit for singletons

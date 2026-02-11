@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import httpx
 import respx
 from typer.testing import CliRunner
@@ -64,6 +66,21 @@ class TestResourceCreate:
         assert result.exit_code == 0
         assert "created" in result.output
 
+    @respx.mock
+    def test_create_with_collection(self):
+        route = respx.post(f"{BASE}/resources/ignition/database-connection").mock(
+            return_value=httpx.Response(201, json={})
+        )
+        result = runner.invoke(app, [
+            "resource", "create", "ignition/database-connection",
+            "--name", "new-db", "--collection", "staging",
+            *COMMON_OPTS,
+        ])
+        assert result.exit_code == 0
+        assert "created" in result.output
+        body = json.loads(route.calls.last.request.content)
+        assert body[0]["collection"] == "staging"
+
 
 class TestResourceUpdate:
     @respx.mock
@@ -82,6 +99,30 @@ class TestResourceUpdate:
         ])
         assert result.exit_code == 0
         assert "updated" in result.output
+
+    @respx.mock
+    def test_update_with_collection(self):
+        # With --collection, signature fetch should include collection param
+        respx.get(
+            url__regex=r".*/resources/find/ignition/database-connection/db1.*",
+        ).mock(
+            return_value=httpx.Response(200, json={
+                "name": "db1", "signature": "sig456",
+            })
+        )
+        route = respx.put(f"{BASE}/resources/ignition/database-connection").mock(
+            return_value=httpx.Response(200, json={})
+        )
+        result = runner.invoke(app, [
+            "resource", "update", "ignition/database-connection", "db1",
+            "--config", '{"description":"updated"}',
+            "--collection", "staging",
+            *COMMON_OPTS,
+        ])
+        assert result.exit_code == 0
+        assert "updated" in result.output
+        body = json.loads(route.calls.last.request.content)
+        assert body[0]["collection"] == "staging"
 
     @respx.mock
     def test_update_no_signature_found(self):
@@ -137,6 +178,33 @@ class TestResourceDelete:
         ])
         assert result.exit_code != 0
         assert "signature" in result.output.lower()
+
+    @respx.mock
+    def test_delete_with_collection(self):
+        """Delete with --collection passes collection and confirm params."""
+        respx.get(
+            url__regex=r".*/resources/find/ignition/database-connection/db1.*",
+        ).mock(
+            return_value=httpx.Response(200, json={
+                "name": "db1", "signature": "mode-sig-999",
+            })
+        )
+        route = respx.delete(
+            url__regex=r".*/resources/ignition/database-connection/db1/mode-sig-999.*",
+        ).mock(
+            return_value=httpx.Response(200, json={})
+        )
+        result = runner.invoke(app, [
+            "resource", "delete", "ignition/database-connection", "db1",
+            "--force", "--collection", "staging",
+            *COMMON_OPTS,
+        ])
+        assert result.exit_code == 0
+        assert "deleted" in result.output
+        # Verify collection and confirm params were sent
+        req_url = str(route.calls.last.request.url)
+        assert "collection=staging" in req_url
+        assert "confirm=true" in req_url
 
 
 class TestResourceUpload:
@@ -328,6 +396,112 @@ class TestResourceNames:
             "resource", "names", "ignition/database-connection", *COMMON_OPTS,
         ])
         assert result.exit_code == 0
+
+
+class TestResourceSingleton:
+    @respx.mock
+    def test_show_singleton(self):
+        respx.get(
+            f"{BASE}/resources/singleton/com.inductiveautomation.opcua/server-config"
+        ).mock(
+            return_value=httpx.Response(200, json={
+                "name": "server-config",
+                "signature": "sig-singleton",
+                "config": {"enabled": True},
+            })
+        )
+        result = runner.invoke(app, [
+            "resource", "show",
+            "com.inductiveautomation.opcua/server-config",
+            *COMMON_OPTS,
+        ])
+        assert result.exit_code == 0
+        assert "singleton" in result.output.lower()
+
+    @respx.mock
+    def test_show_singleton_with_collection(self):
+        route = respx.get(
+            f"{BASE}/resources/singleton/com.inductiveautomation.opcua/server-config"
+        ).mock(
+            return_value=httpx.Response(200, json={
+                "name": "server-config",
+                "signature": "sig-mode",
+            })
+        )
+        result = runner.invoke(app, [
+            "resource", "show",
+            "com.inductiveautomation.opcua/server-config",
+            "--collection", "staging",
+            *COMMON_OPTS,
+        ])
+        assert result.exit_code == 0
+        req_url = str(route.calls.last.request.url)
+        assert "collection=staging" in req_url
+
+    @respx.mock
+    def test_show_singleton_default_if_undefined(self):
+        route = respx.get(
+            f"{BASE}/resources/singleton/com.inductiveautomation.opcua/server-config"
+        ).mock(
+            return_value=httpx.Response(200, json={
+                "name": "server-config",
+                "config": {"enabled": False},
+            })
+        )
+        result = runner.invoke(app, [
+            "resource", "show",
+            "com.inductiveautomation.opcua/server-config",
+            "--default-if-undefined",
+            *COMMON_OPTS,
+        ])
+        assert result.exit_code == 0
+        req_url = str(route.calls.last.request.url)
+        assert "defaultIfUndefined=true" in req_url
+
+    @respx.mock
+    def test_show_regular_with_name_still_works(self):
+        respx.get(
+            f"{BASE}/resources/find/ignition/database-connection/db1"
+        ).mock(
+            return_value=httpx.Response(200, json={
+                "name": "db1",
+                "signature": "sig123",
+            })
+        )
+        result = runner.invoke(app, [
+            "resource", "show",
+            "ignition/database-connection", "db1",
+            *COMMON_OPTS,
+        ])
+        assert result.exit_code == 0
+        assert "db1" in result.output
+
+    @respx.mock
+    def test_update_singleton(self):
+        respx.get(
+            f"{BASE}/resources/singleton/com.inductiveautomation.opcua/server-config"
+        ).mock(
+            return_value=httpx.Response(200, json={
+                "name": "server-config",
+                "signature": "sig-single",
+            })
+        )
+        route = respx.put(
+            f"{BASE}/resources/com.inductiveautomation.opcua/server-config"
+        ).mock(
+            return_value=httpx.Response(200, json={})
+        )
+        result = runner.invoke(app, [
+            "resource", "update",
+            "com.inductiveautomation.opcua/server-config",
+            "--config", '{"enabled": false}',
+            *COMMON_OPTS,
+        ])
+        assert result.exit_code == 0
+        assert "updated" in result.output
+        body = json.loads(route.calls.last.request.content)
+        assert body[0]["name"] == "server-config"
+        assert body[0]["signature"] == "sig-single"
 
 
 class TestResourceTypes:

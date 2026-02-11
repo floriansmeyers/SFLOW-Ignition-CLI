@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import httpx
 import respx
 from typer.testing import CliRunner
@@ -153,3 +155,181 @@ class TestModeDeleteCommand:
         )
         assert result.exit_code == 0
         assert "deleted" in result.output.lower()
+
+
+class TestModeAssignCommand:
+    @respx.mock
+    def test_assign_resource(self):
+        respx.get(
+            f"{BASE}/resources/find/ignition/database-connection/Automotive"
+        ).mock(
+            return_value=httpx.Response(200, json={
+                "name": "Automotive",
+                "config": {"driver": "MySQL ConnectorJ"},
+            })
+        )
+        route = respx.post(
+            f"{BASE}/resources/ignition/database-connection"
+        ).mock(
+            return_value=httpx.Response(201, json={})
+        )
+        result = runner.invoke(app, [
+            "mode", "assign", "staging",
+            "ignition/database-connection", "Automotive",
+            *COMMON_OPTS,
+        ])
+        assert result.exit_code == 0
+        assert "assigned" in result.output.lower()
+        assert "staging" in result.output
+        body = json.loads(route.calls.last.request.content)
+        assert body[0]["collection"] == "staging"
+        assert body[0]["name"] == "Automotive"
+        assert body[0]["config"] == {"driver": "MySQL ConnectorJ"}
+
+    @respx.mock
+    def test_assign_resource_without_config(self):
+        respx.get(
+            f"{BASE}/resources/find/ignition/database-connection/TestDB"
+        ).mock(
+            return_value=httpx.Response(200, json={"name": "TestDB"})
+        )
+        route = respx.post(
+            f"{BASE}/resources/ignition/database-connection"
+        ).mock(
+            return_value=httpx.Response(201, json={})
+        )
+        result = runner.invoke(app, [
+            "mode", "assign", "dev",
+            "ignition/database-connection", "TestDB",
+            *COMMON_OPTS,
+        ])
+        assert result.exit_code == 0
+        body = json.loads(route.calls.last.request.content)
+        assert body[0]["collection"] == "dev"
+        assert "config" not in body[0]
+
+    def test_assign_invalid_resource_type(self):
+        result = runner.invoke(app, [
+            "mode", "assign", "staging",
+            "invalid-no-slash", "TestDB",
+            *COMMON_OPTS,
+        ])
+        assert result.exit_code != 0
+
+
+class TestModeAssignSingleton:
+    @respx.mock
+    def test_assign_singleton_resource(self):
+        respx.get(
+            f"{BASE}/resources/singleton"
+            "/com.inductiveautomation.opcua/server-config"
+        ).mock(
+            return_value=httpx.Response(200, json={
+                "name": "server-config",
+                "config": {"enabled": True},
+            })
+        )
+        route = respx.post(
+            f"{BASE}/resources/com.inductiveautomation.opcua/server-config"
+        ).mock(
+            return_value=httpx.Response(201, json={})
+        )
+        result = runner.invoke(app, [
+            "mode", "assign", "staging",
+            "com.inductiveautomation.opcua/server-config",
+            *COMMON_OPTS,
+        ])
+        assert result.exit_code == 0
+        assert "assigned" in result.output.lower()
+        assert "staging" in result.output
+        body = json.loads(route.calls.last.request.content)
+        assert body[0]["collection"] == "staging"
+        assert body[0]["name"] == "server-config"
+        assert body[0]["config"] == {"enabled": True}
+
+
+class TestModeUnassignSingleton:
+    @respx.mock
+    def test_unassign_singleton_resource(self):
+        respx.get(
+            f"{BASE}/resources/singleton"
+            "/com.inductiveautomation.opcua/server-config"
+        ).mock(
+            return_value=httpx.Response(200, json={
+                "name": "server-config",
+                "signature": "mode-sig-single",
+                "collection": "staging",
+            })
+        )
+        delete_route = respx.delete(
+            f"{BASE}/resources/com.inductiveautomation.opcua"
+            "/server-config/server-config/mode-sig-single"
+        ).mock(
+            return_value=httpx.Response(200, json={"success": True})
+        )
+        result = runner.invoke(app, [
+            "mode", "unassign", "staging",
+            "com.inductiveautomation.opcua/server-config",
+            *COMMON_OPTS,
+        ])
+        assert result.exit_code == 0
+        assert "removed" in result.output.lower()
+        assert "staging" in result.output
+        delete_url = str(delete_route.calls.last.request.url)
+        assert "collection=staging" in delete_url
+        assert "confirm=true" in delete_url
+
+
+class TestModeUnassignCommand:
+    @respx.mock
+    def test_unassign_resource(self):
+        # Fetch must include ?collection=staging to get mode-specific signature
+        respx.get(
+            f"{BASE}/resources/find/ignition/database-connection/Automotive"
+        ).mock(
+            return_value=httpx.Response(200, json={
+                "name": "Automotive",
+                "signature": "mode-sig-789",
+                "collection": "staging",
+            })
+        )
+        delete_route = respx.delete(
+            f"{BASE}/resources/ignition/database-connection/Automotive/mode-sig-789"
+        ).mock(
+            return_value=httpx.Response(200, json={"success": True})
+        )
+        result = runner.invoke(app, [
+            "mode", "unassign", "staging",
+            "ignition/database-connection", "Automotive",
+            *COMMON_OPTS,
+        ])
+        assert result.exit_code == 0
+        assert "removed" in result.output.lower()
+        assert "staging" in result.output
+        # Verify collection and confirm params were sent
+        delete_url = str(delete_route.calls.last.request.url)
+        assert "collection=staging" in delete_url
+        assert "confirm=true" in delete_url
+
+    @respx.mock
+    def test_unassign_no_signature(self):
+        respx.get(
+            f"{BASE}/resources/find/ignition/database-connection/TestDB"
+        ).mock(
+            return_value=httpx.Response(200, json={"name": "TestDB"})
+        )
+        result = runner.invoke(app, [
+            "mode", "unassign", "staging",
+            "ignition/database-connection", "TestDB",
+            *COMMON_OPTS,
+        ])
+        assert result.exit_code != 0
+        assert "signature" in result.output.lower()
+
+    def test_unassign_invalid_resource_type(self):
+        result = runner.invoke(app, [
+            "mode", "unassign", "staging",
+            "bad-type", "TestDB",
+            *COMMON_OPTS,
+        ])
+        assert result.exit_code != 0

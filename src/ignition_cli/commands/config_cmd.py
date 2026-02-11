@@ -132,10 +132,9 @@ def show(
         raise typer.Exit(1)
 
     data = profile.model_dump(exclude_none=True)
-    # Mask token for display
+    # Mask sensitive fields for display
     if "token" in data:
-        token = data["token"]
-        data["token"] = token[:4] + "..." + token[-2:] if len(token) > 6 else "***"
+        data["token"] = "***"
     if "password" in data:
         data["password"] = "***"
 

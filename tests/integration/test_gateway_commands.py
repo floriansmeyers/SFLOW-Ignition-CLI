@@ -139,7 +139,7 @@ class TestGatewayBackupRestore:
             return_value=httpx.Response(200, json={})
         )
         result = runner.invoke(app, [
-            "gateway", "restore", str(backup_file),
+            "gateway", "restore", str(backup_file), "--force",
             "--url", "https://gw:8043", "--token", "k:s",
         ])
         assert result.exit_code == 0
@@ -147,7 +147,7 @@ class TestGatewayBackupRestore:
 
     def test_restore_file_not_found(self):
         result = runner.invoke(app, [
-            "gateway", "restore", "/nonexistent/file.gwbk",
+            "gateway", "restore", "/nonexistent/file.gwbk", "--force",
             "--url", "https://gw:8043", "--token", "k:s",
         ])
         assert result.exit_code != 0

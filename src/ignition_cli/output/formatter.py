@@ -36,7 +36,9 @@ def output_csv(columns: Sequence[str], rows: Sequence[Sequence[Any]]) -> None:
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(columns)
-    writer.writerows(rows)
+    writer.writerows(
+        [[str(v) if v is not None else "" for v in row] for row in rows]
+    )
     console.print(buf.getvalue(), end="")
 
 

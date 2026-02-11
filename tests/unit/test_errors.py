@@ -12,6 +12,7 @@ from ignition_cli.client.errors import (
     GatewayConnectionError,
     IgnitionCLIError,
     NotFoundError,
+    ValidationError,
     error_handler,
 )
 
@@ -46,6 +47,16 @@ class TestExceptionHierarchy:
         exc = ConfigurationError("no url")
         assert isinstance(exc, IgnitionCLIError)
         assert exc.exit_code == 6
+
+    def test_validation_error(self):
+        exc = ValidationError("name too long")
+        assert isinstance(exc, IgnitionCLIError)
+        assert exc.exit_code == 7
+        assert "name too long" in str(exc)
+
+    def test_validation_error_empty(self):
+        exc = ValidationError()
+        assert "Validation error" in str(exc)
 
     def test_api_error(self):
         exc = GatewayAPIError(500, "server error")

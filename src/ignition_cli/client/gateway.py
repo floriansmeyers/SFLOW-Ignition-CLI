@@ -16,6 +16,7 @@ from ignition_cli.client.errors import (
     GatewayConnectionError,
     IgnitionCLIError,
     NotFoundError,
+    ValidationError,
 )
 from ignition_cli.config.constants import DEFAULT_API_BASE, DEFAULT_MAX_RETRIES
 from ignition_cli.config.models import GatewayProfile
@@ -28,6 +29,10 @@ class GatewayClient:
         self.profile = profile
         self.base_url = f"{profile.url}{DEFAULT_API_BASE}"
         auth = resolve_auth(profile)
+        if not profile.verify_ssl:
+            import sys
+
+            print("Warning: TLS certificate verification is disabled", file=sys.stderr)
         transport = httpx.HTTPTransport(retries=DEFAULT_MAX_RETRIES)
         self._client = httpx.Client(
             base_url=self.base_url,
@@ -56,11 +61,21 @@ class GatewayClient:
         except (json.JSONDecodeError, KeyError):
             detail = response.text
         if status in (401, 403):
-            raise AuthenticationError(f"Authentication failed: {detail}")
+            msg = "Authentication failed. Check your API token."
+            if self.base_url.startswith("http://"):
+                msg += (
+                    " Note: This gateway is using HTTP (not HTTPS)."
+                    " If the gateway has 'Require secure connections"
+                    " for API Keys' enabled (the default), you must"
+                    " use HTTPS or disable that setting."
+                )
+            raise AuthenticationError(msg)
         if status == 404:
             raise NotFoundError(f"Not found: {detail}")
         if status == 409:
             raise ConflictError(f"Conflict: {detail}")
+        if status == 422:
+            raise ValidationError(detail)
         raise GatewayAPIError(status, detail)
 
     def request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
@@ -111,9 +126,9 @@ class GatewayClient:
         """Auto-paginate through a list endpoint, returning all items."""
         all_items: list[Any] = []
         offset = 0
+        caller_params = kwargs.pop("params", {})
         while True:
-            params = kwargs.pop("params", {})
-            params.update({"limit": limit, "offset": offset})
+            params = {**caller_params, "limit": limit, "offset": offset}
             data = self.get_json(path, params=params, **kwargs)
             if isinstance(data, list):
                 all_items.extend(data)
@@ -128,18 +143,28 @@ class GatewayClient:
         return all_items
 
     def stream_to_file(self, path: str, dest: Path, **kwargs: Any) -> int:
-        """Stream a response body to a file, returning bytes written."""
+        """Stream a response body to a file, returning bytes written.
+
+        Uses atomic write: streams to a .partial temp file, then renames
+        on success. Cleans up the temp file on any error.
+        """
+        temp = dest.with_suffix(dest.suffix + ".partial")
         try:
             with self._client.stream("GET", path, **kwargs) as response:
                 if response.status_code >= 400:
                     response.read()  # must read body before _handle_response
                 self._handle_response(response)
                 total = 0
-                with open(dest, "wb") as f:
+                with open(temp, "wb") as f:
                     for chunk in response.iter_bytes(chunk_size=8192):
                         f.write(chunk)
                         total += len(chunk)
-                return total
+            if total == 0:
+                raise IgnitionCLIError(
+                    f"Empty response when downloading to {dest}"
+                )
+            temp.rename(dest)
+            return total
         except httpx.ConnectError as exc:
             raise GatewayConnectionError(
                 f"Cannot connect to gateway at {self.profile.url}: {exc}"
@@ -156,8 +181,18 @@ class GatewayClient:
             raise IgnitionCLIError(
                 f"Cannot write to {dest}: {exc}"
             ) from exc
+        finally:
+            if temp.exists():
+                temp.unlink(missing_ok=True)
 
-    def get_openapi_spec(self) -> dict:
+    def stream_upload(
+        self, method: str, path: str, file_path: Path, **kwargs: Any,
+    ) -> httpx.Response:
+        """Upload a file using streaming to avoid loading into memory."""
+        with open(file_path, "rb") as f:
+            return self.request(method, path, content=f, **kwargs)
+
+    def get_openapi_spec(self) -> dict[str, Any]:
         """Fetch the OpenAPI spec from the gateway root URL (with auth)."""
         url = f"{self.profile.url}/openapi.json"
         try:
@@ -174,4 +209,5 @@ class GatewayClient:
             raise GatewayConnectionError(
                 f"Invalid URL for gateway at {self.profile.url}: {exc}"
             ) from exc
-        return self._handle_response(response).json()
+        result: dict[str, Any] = self._handle_response(response).json()
+        return result

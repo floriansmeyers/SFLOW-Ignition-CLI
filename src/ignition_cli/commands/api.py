@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
@@ -22,11 +22,12 @@ app = typer.Typer(name="api", help="Raw API access and endpoint discovery.")
 console = Console()
 
 
-def _parse_body(data: str | None) -> dict | None:
+def _parse_body(data: str | None) -> dict[str, Any] | None:
     if not data:
         return None
     try:
-        return json.loads(data)
+        result: dict[str, Any] = json.loads(data)
+        return result
     except json.JSONDecodeError:
         console.print("[red]Invalid JSON body.[/]")
         raise typer.Exit(1) from None

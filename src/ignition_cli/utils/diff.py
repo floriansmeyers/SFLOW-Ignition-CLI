@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import difflib
 import json
+from typing import Any
 
 from rich.console import Console
 from rich.syntax import Syntax
@@ -11,8 +12,8 @@ from rich.syntax import Syntax
 
 def diff_projects(
     name: str,
-    source_data: dict,
-    target_data: dict,
+    source_data: dict[str, Any],
+    target_data: dict[str, Any],
     console: Console,
 ) -> None:
     """Show a colored diff between project data from two gateways."""

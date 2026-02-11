@@ -49,6 +49,16 @@ class ConfigurationError(IgnitionCLIError):
     exit_code = 6
 
 
+class ValidationError(IgnitionCLIError):
+    """Validation failed (422)."""
+
+    exit_code = 7
+
+    def __init__(self, detail: str = "") -> None:
+        msg = f"Validation error: {detail}" if detail else "Validation error"
+        super().__init__(msg)
+
+
 class GatewayAPIError(IgnitionCLIError):
     """Generic API error from the gateway."""
 

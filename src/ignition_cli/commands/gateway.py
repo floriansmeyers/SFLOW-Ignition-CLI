@@ -78,6 +78,7 @@ def backup(
 @error_handler
 def restore(
     file: Annotated[str, typer.Argument(help="Backup file path (.gwbk)")],
+    force: Annotated[bool, typer.Option("--force", help="Skip confirmation")] = False,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -90,10 +91,20 @@ def restore(
         console.print(f"[red]File not found: {file}[/]")
         raise typer.Exit(1)
 
+    if not force:
+        from rich.prompt import Confirm
+
+        target = url or gateway or "default"
+        if not Confirm.ask(
+            f"Restore backup to gateway '{target}'? "
+            "This will overwrite the current configuration"
+        ):
+            console.print("Cancelled.")
+            return
+
     with make_client(gateway, url, token) as client:
-        client.post(
-            "/backup",
-            content=backup_path.read_bytes(),
+        client.stream_upload(
+            "POST", "/backup", backup_path,
             headers={"Content-Type": "application/octet-stream"},
         )
         console.print("[green]Backup restore initiated.[/]")

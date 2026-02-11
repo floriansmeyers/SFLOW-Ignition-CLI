@@ -109,6 +109,10 @@ def status(
 @error_handler
 def restart(
     name: Annotated[str, typer.Argument(help="Device name")],
+    delay: Annotated[
+        float,
+        typer.Option("--delay", help="Seconds between disable/enable"),
+    ] = 2.0,
     module: Annotated[
         str, typer.Option("--module", help="Resource module"),
     ] = _DEVICE_MODULE,
@@ -136,7 +140,7 @@ def restart(
         body = {**data, "enabled": False}
         client.put(f"/resources/{module}/{device_type}", json=[body])
         console.print(f"[dim]Disabled '{name}'...[/]")
-        time.sleep(1)
+        time.sleep(delay)
 
         # Re-fetch to get updated signature, then re-enable
         data = client.get_json(f"/resources/find/{module}/{device_type}/{name}")

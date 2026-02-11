@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Generator
+
 import httpx
 
 from ignition_cli.config.models import GatewayProfile
@@ -13,7 +15,9 @@ class APITokenAuth(httpx.Auth):
     def __init__(self, token: str) -> None:
         self.token = token
 
-    def auth_flow(self, request: httpx.Request):  # type: ignore[override]
+    def auth_flow(
+        self, request: httpx.Request,
+    ) -> Generator[httpx.Request, httpx.Response, None]:
         request.headers["X-Ignition-API-Token"] = self.token
         yield request
 
@@ -27,5 +31,14 @@ def resolve_auth(profile: GatewayProfile) -> httpx.Auth | None:
     if profile.token:
         return APITokenAuth(profile.token)
     if profile.username and profile.password:
+        import sys
+
+        print(
+            "Warning: Using HTTP Basic auth. The Ignition 8.3 REST API"
+            " only supports API token authentication"
+            " (X-Ignition-API-Token). Basic auth will likely fail"
+            " with a 401 error. Use 'config add' with --token instead.",
+            file=sys.stderr,
+        )
         return BasicAuth(profile.username, profile.password)
     return None

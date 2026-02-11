@@ -14,7 +14,9 @@ from ignition_cli.commands._common import (
     TokenOpt,
     UrlOpt,
     extract_items,
+    get_resource_data,
     make_client,
+    validate_resource_type,
 )
 from ignition_cli.output.formatter import output
 
@@ -156,4 +158,93 @@ def delete(
         client.delete(f"/mode/{name}")
         console.print(
             f"[green]Deployment mode '{name}' deleted.[/]"
+        )
+
+
+@app.command()
+@error_handler
+def assign(
+    name: Annotated[str, typer.Argument(help="Mode name")],
+    resource_type: Annotated[
+        str,
+        typer.Argument(
+            help="Resource type (e.g. ignition/database-connection)"
+        ),
+    ],
+    resource_name: Annotated[
+        str | None,
+        typer.Argument(
+            help="Resource name (omit for singleton resources)",
+        ),
+    ] = None,
+    gateway: GatewayOpt = None,
+    url: UrlOpt = None,
+    token: TokenOpt = None,
+) -> None:
+    """Assign a resource to a deployment mode.
+
+    Omit RESOURCE_NAME for singleton resources.
+    """
+    module, rtype = validate_resource_type(resource_type)
+    with make_client(gateway, url, token) as client:
+        # Fetch existing resource to get its current config
+        data = get_resource_data(client, module, rtype, resource_name)
+        resolved_name = resource_name or data.get("name", "")
+        body = {**data, "name": resolved_name, "collection": name}
+        # Remove read-only fields that shouldn't be sent back
+        for key in ("signature", "state", "resourceCount"):
+            body.pop(key, None)
+        client.post(f"/resources/{module}/{rtype}", json=[body])
+        console.print(
+            f"[green]Resource '{resolved_name}' ({resource_type}) "
+            f"assigned to mode '{name}'.[/]"
+        )
+
+
+@app.command()
+@error_handler
+def unassign(
+    name: Annotated[str, typer.Argument(help="Mode name")],
+    resource_type: Annotated[
+        str,
+        typer.Argument(
+            help="Resource type (e.g. ignition/database-connection)"
+        ),
+    ],
+    resource_name: Annotated[
+        str | None,
+        typer.Argument(
+            help="Resource name (omit for singleton resources)",
+        ),
+    ] = None,
+    gateway: GatewayOpt = None,
+    url: UrlOpt = None,
+    token: TokenOpt = None,
+) -> None:
+    """Remove a resource from a deployment mode.
+
+    Omit RESOURCE_NAME for singleton resources.
+    """
+    module, rtype = validate_resource_type(resource_type)
+    with make_client(gateway, url, token) as client:
+        # Fetch mode-specific resource to get its signature
+        data = get_resource_data(
+            client, module, rtype, resource_name,
+            params={"collection": name},
+        )
+        resolved_name = resource_name or data.get("name", "")
+        sig = data.get("signature")
+        if not sig:
+            console.print(
+                f"[red]No signature found on resource '{resolved_name}'. "
+                "Cannot unassign.[/]"
+            )
+            raise typer.Exit(1)
+        client.delete(
+            f"/resources/{module}/{rtype}/{resolved_name}/{sig}",
+            params={"collection": name, "confirm": "true"},
+        )
+        console.print(
+            f"[green]Resource '{resolved_name}' ({resource_type}) "
+            f"removed from mode '{name}'.[/]"
         )
