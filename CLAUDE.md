@@ -31,6 +31,7 @@ src/ignition_cli/
 │   ├── device.py       # Device list/show/restart (configurable module/type)
 │   ├── gateway.py      # Status, info, backup, restore, modules, logs, entity-browse
 │   ├── modes.py        # Deployment mode CRUD
+│   ├── perspective.py  # Perspective views, pages, styles, session props (export/import cycle)
 │   ├── project.py      # Project CRUD, export/import, copy/rename, diff, watch
 │   ├── resource.py     # Generic resource CRUD, upload/download datafiles
 │   └── tag.py          # Tag browse, read, write, export, import, providers
@@ -38,7 +39,7 @@ src/ignition_cli/
 │   ├── constants.py    # API base path, defaults
 │   ├── manager.py      # ConfigManager (TOML read/write, profile resolution)
 │   └── models.py       # GatewayProfile, CLIConfig Pydantic models
-├── models/             # Pydantic models (gateway, project, tag, device, resource, mode, common)
+├── models/             # Pydantic models (gateway, project, tag, device, resource, mode, perspective, common)
 ├── output/
 │   ├── formatter.py    # output() dispatcher (JSON, YAML, CSV, table)
 │   └── tables.py       # Rich table builders
@@ -134,3 +135,7 @@ After every implementation task, always:
 - Singleton resources: `GET /resources/singleton/{module}/{type}` — no name required; accepts `?collection=X` and `?defaultIfUndefined=true`
 - Singleton resources share the same `POST/PUT /resources/{module}/{type}` create/update endpoints as named resources
 - `resource show`, `resource update`, `mode assign`, `mode unassign` accept optional name — omit for singletons
+- Perspective views, pages, styles, and session-props are **project-scoped** — NOT exposed via the gateway resource API
+- Perspective resources are only accessible via the project export/import cycle (export zip → modify files → import with `overwrite=true`)
+- Project zip structure for Perspective: `com.inductiveautomation.perspective/views/{path}/view.json`, `style-classes/{name}/style.json`, `page-config/config.json`, `session-props/props.json`
+- Each Perspective resource has a `resource.json` with metadata (`scope`, `version`, `restricted`, `overridable`, `files`, `attributes`)

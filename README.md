@@ -28,6 +28,7 @@ ignition-cli gateway status
 | `tag` | Tag operations | `browse`, `read`\*, `write`\*, `export`, `import`, `providers` |
 | `device` | Device connections | `list`, `show`, `restart` (supports `--module`/`--type` for non-OPC-UA) |
 | `resource` | Generic resource CRUD | `list`, `show`, `create`, `update`, `delete`, `names`, `types`, `upload`, `download` |
+| `perspective` | Perspective views, pages, styles | `view list/show/create/update/delete/tree`, `page list/show/update`, `style list/show/create/update/delete`, `session show/update` |
 | `mode` | Deployment modes | `list`, `show`, `create`, `update`, `delete`, `assign`, `unassign` |
 | `api` | Raw API access | `get`, `post`, `put`, `delete`, `discover`, `spec` |
 
@@ -51,6 +52,17 @@ ignition-cli gateway status -f yaml
 ## Documentation
 
 Run `ignition-cli --help` for full usage information. See [docs/usage.md](docs/usage.md) for the complete reference.
+
+### Scenarios
+
+8 production-ready automation scripts in [docs/scenarios/](docs/scenarios/overview.md) for tasks where the CLI provides unique value:
+
+| # | Scenario | # | Scenario |
+|---|----------|---|----------|
+| 1 | [Tag Snapshot & Version Control](docs/scenarios/01-tag-snapshot-version-control.md) | 5 | [Tag Template Factory](docs/scenarios/05-tag-template-factory.md) |
+| 2 | [Tag Diff Across Gateways](docs/scenarios/02-tag-diff-across-gateways.md) | 6 | [Upgrade Verification](docs/scenarios/06-upgrade-verification.md) |
+| 3 | [Resource Inventory Export](docs/scenarios/03-resource-inventory-export.md) | 7 | [Compliance Audit Report](docs/scenarios/07-compliance-report/README.md) |
+| 4 | [Bulk Device Commissioning](docs/scenarios/04-bulk-device-commissioning.md) | 8 | [Environment Cloning](docs/scenarios/08-environment-cloning.md) |
 
 ## License
 

@@ -11,6 +11,7 @@ from ignition_cli.commands import (
     device,
     gateway,
     modes,
+    perspective,
     project,
     resource,
     tag,
@@ -50,6 +51,7 @@ app.add_typer(tag.app, name="tag")
 app.add_typer(device.app, name="device")
 app.add_typer(resource.app, name="resource")
 app.add_typer(modes.app, name="mode")
+app.add_typer(perspective.app, name="perspective")
 app.add_typer(api.app, name="api")
 
 

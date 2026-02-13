@@ -20,6 +20,7 @@ Complete reference for the `ignition-cli` command-line tool for Ignition SCADA 8
    - [tag](#tag) (6 commands)
    - [device](#device) (3 commands)
    - [resource](#resource) (9 commands)
+   - [perspective](#perspective) (15 commands)
    - [mode](#mode) (7 commands)
    - [api](#api) (6 commands)
 8. [Common Workflows](#8-common-workflows)
@@ -46,6 +47,7 @@ Complete reference for the `ignition-cli` command-line tool for Ignition SCADA 8
 - Browse, read, write, export, and import tags
 - List and inspect OPC-UA device connections
 - Generic CRUD operations on any gateway resource type
+- Manage Perspective views, pages, style classes, and session properties
 - Upload and download binary datafiles (fonts, themes, icons, drivers)
 - Manage deployment modes (dev/staging/prod)
 - Raw API access to arbitrary gateway endpoints
@@ -2007,6 +2009,581 @@ $ ignition-cli resource types
 
 ---
 
+### perspective
+
+Manage Perspective views, pages, style classes, and session properties within a project. All operations use the project export/import cycle since Perspective resources are project-scoped and not accessible via the gateway resource API.
+
+> **Note:** Write operations (create, update, delete) export the project, modify files, repack the zip, and import with overwrite. This is safe but involves a full project round-trip. Read-only operations (list, show, tree) stream the project zip and parse entries in memory without importing.
+
+```
+ignition-cli perspective <subcommand>
+```
+
+Subcommands: `view`, `page`, `style`, `session`.
+
+---
+
+#### perspective view list
+
+List all Perspective views in a project.
+
+```bash
+ignition-cli perspective view list <project> [--gateway <profile>] [--url <url>] [--token <token>] [--format <fmt>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `project` | Project name |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+| `--format` | `-f` | Output format (default: `table`) |
+
+**Example:**
+
+```bash
+$ ignition-cli perspective view list samplequickstart
+         Views: samplequickstart
+┌───────────────────────────────┐
+│ View Path                     │
+├───────────────────────────────┤
+│ Home/Home Large               │
+│ Home/Home Small               │
+│ Home/Landing Page             │
+│ Pumps/Pump Overview           │
+│ Pumps/Station Details         │
+└───────────────────────────────┘
+```
+
+---
+
+#### perspective view show
+
+Show a Perspective view definition (view.json).
+
+```bash
+ignition-cli perspective view show <project> <view_path> [--gateway <profile>] [--url <url>] [--token <token>] [--format <fmt>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `project` | Project name |
+| `view_path` | View path (e.g. `Page/Home`, `Folder/SubFolder/View`) |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+| `--format` | `-f` | Output format (default: `json`) |
+
+**Example:**
+
+```bash
+ignition-cli perspective view show samplequickstart "Home/Home Large"
+ignition-cli perspective view show samplequickstart "Pumps/Pump Overview" -f yaml
+```
+
+---
+
+#### perspective view create
+
+Create a new Perspective view in a project.
+
+```bash
+ignition-cli perspective view create <project> <view_path> --json <json> [--gateway <profile>] [--url <url>] [--token <token>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `project` | Project name |
+| `view_path` | View path to create (e.g. `MyFolder/MyView`) |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--json` | `-j` | View JSON string or `@file` path (required) |
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+
+**Example:**
+
+```bash
+# Inline JSON
+ignition-cli perspective view create MyProject "Dashboard/Overview" \
+  --json '{"root":{"type":"ia.container.flex","meta":{"name":"root"},"props":{"direction":"column"}}}'
+
+# From file
+ignition-cli perspective view create MyProject "Dashboard/Overview" --json @view.json
+```
+
+---
+
+#### perspective view update
+
+Update an existing Perspective view.
+
+```bash
+ignition-cli perspective view update <project> <view_path> --json <json> [--gateway <profile>] [--url <url>] [--token <token>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `project` | Project name |
+| `view_path` | View path to update |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--json` | `-j` | View JSON string or `@file` path (required) |
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+
+**Example:**
+
+```bash
+ignition-cli perspective view update MyProject "Dashboard/Overview" \
+  --json '{"root":{"type":"ia.container.flex","meta":{"name":"root"},"props":{"direction":"row"}}}'
+
+ignition-cli perspective view update MyProject "Dashboard/Overview" --json @updated-view.json
+```
+
+---
+
+#### perspective view delete
+
+Delete a Perspective view from a project. Prompts for confirmation unless `--force` is used.
+
+```bash
+ignition-cli perspective view delete <project> <view_path> [--force] [--gateway <profile>] [--url <url>] [--token <token>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `project` | Project name |
+| `view_path` | View path to delete |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--force` | | Skip confirmation prompt |
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+
+**Example:**
+
+```bash
+ignition-cli perspective view delete MyProject "Dashboard/Overview" --force
+# View 'Dashboard/Overview' deleted from project 'MyProject'.
+```
+
+---
+
+#### perspective view tree
+
+Show the view hierarchy as a tree.
+
+```bash
+ignition-cli perspective view tree <project> [--gateway <profile>] [--url <url>] [--token <token>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `project` | Project name |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+
+**Example:**
+
+```bash
+$ ignition-cli perspective view tree samplequickstart
+samplequickstart views
+├── Home
+│   ├── Home Large
+│   ├── Home Small
+│   └── Landing Page
+└── Pumps
+    ├── Pump Overview
+    └── Station Details
+```
+
+---
+
+#### perspective page list
+
+List all page routes in the Perspective page configuration.
+
+```bash
+ignition-cli perspective page list <project> [--gateway <profile>] [--url <url>] [--token <token>] [--format <fmt>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `project` | Project name |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+| `--format` | `-f` | Output format (default: `table`) |
+
+**Example:**
+
+```bash
+$ ignition-cli perspective page list samplequickstart
+       Pages: samplequickstart
+┌───────────┬─────────────────────┐
+│ Route     │ View Path           │
+├───────────┼─────────────────────┤
+│ /         │ Home/Landing Page   │
+│ /home     │ Home/Home Large     │
+│ /pumps    │ Pumps/Pump Overview │
+└───────────┴─────────────────────┘
+```
+
+---
+
+#### perspective page show
+
+Show the full Perspective page configuration (config.json).
+
+```bash
+ignition-cli perspective page show <project> [--gateway <profile>] [--url <url>] [--token <token>] [--format <fmt>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `project` | Project name |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+| `--format` | `-f` | Output format (default: `json`) |
+
+**Example:**
+
+```bash
+ignition-cli perspective page show samplequickstart
+ignition-cli perspective page show samplequickstart -f yaml
+```
+
+---
+
+#### perspective page update
+
+Update the Perspective page configuration.
+
+```bash
+ignition-cli perspective page update <project> --json <json> [--gateway <profile>] [--url <url>] [--token <token>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `project` | Project name |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--json` | `-j` | Page config JSON string or `@file` path (required) |
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+
+**Example:**
+
+```bash
+ignition-cli perspective page update MyProject \
+  --json '{"pages":{"/":{"viewPath":"Home/Main"},"/settings":{"viewPath":"Settings/Main"}}}'
+
+ignition-cli perspective page update MyProject --json @page-config.json
+```
+
+---
+
+#### perspective style list
+
+List all Perspective style classes in a project.
+
+```bash
+ignition-cli perspective style list <project> [--gateway <profile>] [--url <url>] [--token <token>] [--format <fmt>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `project` | Project name |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+| `--format` | `-f` | Output format (default: `table`) |
+
+**Example:**
+
+```bash
+$ ignition-cli perspective style list samplequickstart
+   Style Classes: samplequickstart
+┌──────────────────────────────┐
+│ Name                         │
+├──────────────────────────────┤
+│ Button/Primary               │
+│ Card/Default                 │
+│ Text/Heading                 │
+└──────────────────────────────┘
+```
+
+---
+
+#### perspective style show
+
+Show a Perspective style class definition (style.json).
+
+```bash
+ignition-cli perspective style show <project> <style_name> [--gateway <profile>] [--url <url>] [--token <token>] [--format <fmt>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `project` | Project name |
+| `style_name` | Style class name |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+| `--format` | `-f` | Output format (default: `json`) |
+
+**Example:**
+
+```bash
+ignition-cli perspective style show samplequickstart "Button/Primary"
+ignition-cli perspective style show samplequickstart "Card/Default" -f yaml
+```
+
+---
+
+#### perspective style create
+
+Create a new Perspective style class.
+
+```bash
+ignition-cli perspective style create <project> <style_name> --json <json> [--gateway <profile>] [--url <url>] [--token <token>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `project` | Project name |
+| `style_name` | Style class name |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--json` | `-j` | Style JSON string or `@file` path (required) |
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+
+**Example:**
+
+```bash
+ignition-cli perspective style create MyProject "Button/Danger" \
+  --json '{"base":{"style":{"backgroundColor":"#dc3545","color":"white"}}}'
+
+ignition-cli perspective style create MyProject "Card/Custom" --json @style.json
+```
+
+---
+
+#### perspective style update
+
+Update an existing Perspective style class.
+
+```bash
+ignition-cli perspective style update <project> <style_name> --json <json> [--gateway <profile>] [--url <url>] [--token <token>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `project` | Project name |
+| `style_name` | Style class name |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--json` | `-j` | Style JSON string or `@file` path (required) |
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+
+**Example:**
+
+```bash
+ignition-cli perspective style update MyProject "Button/Danger" \
+  --json '{"base":{"style":{"backgroundColor":"#ff0000","color":"white","borderRadius":"8px"}}}'
+```
+
+---
+
+#### perspective style delete
+
+Delete a Perspective style class from a project. Prompts for confirmation unless `--force` is used.
+
+```bash
+ignition-cli perspective style delete <project> <style_name> [--force] [--gateway <profile>] [--url <url>] [--token <token>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `project` | Project name |
+| `style_name` | Style class name to delete |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--force` | | Skip confirmation prompt |
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+
+**Example:**
+
+```bash
+ignition-cli perspective style delete MyProject "Button/Danger" --force
+# Style class 'Button/Danger' deleted from project 'MyProject'.
+```
+
+---
+
+#### perspective session show
+
+Show the Perspective session properties (props.json).
+
+```bash
+ignition-cli perspective session show <project> [--gateway <profile>] [--url <url>] [--token <token>] [--format <fmt>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `project` | Project name |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+| `--format` | `-f` | Output format (default: `json`) |
+
+**Example:**
+
+```bash
+ignition-cli perspective session show MyProject
+ignition-cli perspective session show MyProject -f yaml
+```
+
+---
+
+#### perspective session update
+
+Update the Perspective session properties.
+
+```bash
+ignition-cli perspective session update <project> --json <json> [--gateway <profile>] [--url <url>] [--token <token>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `project` | Project name |
+
+**Options:**
+
+| Option | Short | Description |
+|---|---|---|
+| `--json` | `-j` | Session props JSON string or `@file` path (required) |
+| `--gateway` | `-g` | Gateway profile |
+| `--url` | | Gateway URL override |
+| `--token` | | API token override |
+
+**Example:**
+
+```bash
+ignition-cli perspective session update MyProject \
+  --json '{"props":{"auth":{"idp":"default"}}}'
+
+ignition-cli perspective session update MyProject --json @session-props.json
+```
+
+---
+
 ### mode
 
 Manage gateway deployment modes. Deployment modes (introduced in Ignition 8.3) allow a single gateway to hold configuration for multiple environments (dev, staging, production).
@@ -2630,6 +3207,22 @@ for rtype in $(ignition-cli resource types 2>/dev/null | tail -n +4 | head -n -1
   echo
 done
 ```
+
+### More Scenarios
+
+8 production-ready automation scripts are available in the [scenarios directory](scenarios/),
+focused on tasks where the CLI provides unique value beyond Ignition's native features:
+
+- [Tag Snapshot & Version Control](scenarios/01-tag-snapshot-version-control.md) — Automated tag configuration snapshots
+- [Tag Diff Across Gateways](scenarios/02-tag-diff-across-gateways.md) — Structural tag tree comparison
+- [Resource Inventory Export](scenarios/03-resource-inventory-export.md) — Machine-readable gateway inventory
+- [Bulk Device Commissioning](scenarios/04-bulk-device-commissioning.md) — CSV-driven device creation
+- [Tag Template Factory](scenarios/05-tag-template-factory.md) — CSV to Ignition tag JSON generation
+- [Upgrade Verification](scenarios/06-upgrade-verification.md) — Pre/post upgrade snapshot comparison
+- [Compliance Audit Report](scenarios/07-compliance-report/README.md) — Fleet-wide compliance reporting
+- [Environment Cloning](scenarios/08-environment-cloning.md) — Production to dev/staging with connection remapping
+
+See the [scenarios overview](scenarios/overview.md) for details.
 
 ---
 
