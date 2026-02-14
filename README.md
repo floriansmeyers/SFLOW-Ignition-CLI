@@ -49,6 +49,18 @@ ignition-cli gateway status -f yaml
 - **HTTP Basic Auth**: `--username admin --password secret`
 - **Environment variables**: `IGNITION_GATEWAY_URL`, `IGNITION_API_TOKEN`
 
+## Tools
+
+### Perspective View Previewer
+
+`tools/perspective-viewer.html` — a self-contained HTML file that renders Perspective view JSON locally in a browser. No server or dependencies required.
+
+- **Paste JSON** or **drag & drop** a `.json` file
+- **Load via URL parameter**: `?file=path` for Playwright automation
+- **Keyboard shortcut**: `Ctrl/Cmd+Enter` to render
+- **Controls**: Dark/light background, component outlines toggle, fit-to-pane scaling
+- **Renders**: Coord/flex/column/drawing/breakpoint/tab/split containers, labels, buttons, inputs, vessel/pump/valve/motor/sensor symbols, SVG shapes (path, rect, circle, ellipse, polygon), embedded view placeholders
+
 ## Documentation
 
 Run `ignition-cli --help` for full usage information. See [docs/usage.md](docs/usage.md) for the complete reference.

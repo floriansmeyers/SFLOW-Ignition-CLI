@@ -51,6 +51,8 @@ tests/
 ├── unit/               # Unit tests (errors, formatter, config, client, models, helpers)
 ├── integration/        # Integration tests (all command groups with respx mocks)
 └── e2e/                # End-to-end tests (requires live gateway, @pytest.mark.e2e)
+tools/
+└── perspective-viewer.html  # Local HTML renderer for previewing Perspective view JSON
 ```
 
 ## Common Commands

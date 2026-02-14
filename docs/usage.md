@@ -3410,3 +3410,47 @@ ignition-cli api get /projects/list
 # See what endpoints exist
 ignition-cli api discover --filter "project"
 ```
+
+---
+
+## 10. Tools
+
+### Perspective View Previewer
+
+`tools/perspective-viewer.html` is a self-contained HTML file that renders Perspective view JSON locally in a browser. Use it to preview HMI screens without deploying to the gateway.
+
+#### Usage
+
+Open the file directly in a browser, or serve it locally:
+
+```bash
+# Option 1: Open directly
+open tools/perspective-viewer.html
+
+# Option 2: Serve via HTTP (needed for ?file= parameter)
+python3 -m http.server 8765
+# Then open http://localhost:8765/tools/perspective-viewer.html
+```
+
+#### Features
+
+- **Paste JSON** into the editor or **drag & drop** a `.json` file
+- **Load via URL**: `?file=path/to/view.json` for automation with Playwright
+- **Ctrl/Cmd+Enter** renders instantly
+- **Dark/Light** canvas background toggle
+- **Outlines** mode shows component bounding boxes with type tooltips
+- **Fit** scales the view to fit the preview pane
+
+#### Supported Components
+
+| Category | Types |
+|---|---|
+| Containers | `ia.container.coord` (px & %), `flex`, `column`, `drawing`, `breakpt`, `tab`, `split` |
+| Display | `label`, `icon`, `image`, `markdown`, `view` (embedded), `flex-repeater`, `sparkline`, `table` |
+| Input | `button`, `text-field`, `dropdown` |
+| Symbols | `vessel` (with level fill), `pump`, `valve`, `motor`, `sensor` |
+| Shapes | `path`, `rect`, `circle`, `ellipse`, `polygon`, `line`, `group`, `svg` |
+
+#### Limitations
+
+Bindings, events, scripts, tag values, and complex chart rendering are not supported — only static `props` values are rendered.

@@ -1,0 +1,1197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Perspective View Previewer</title>
+<!--
+  Local-only developer tool for previewing Ignition Perspective view JSON.
+  All rendered text is escaped via esc() to prevent injection.
+  Not intended for deployment as a web application.
+-->
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#1e1e2e;--surface:#2a2a3c;--border:#3a3a4c;--text:#cdd6f4;--dim:#6c7086;--accent:#89b4fa;--green:#a6e3a1;--red:#f38ba8;--yellow:#f9e2af}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+header{display:flex;align-items:center;gap:12px;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+header h1{font-size:14px;font-weight:600;white-space:nowrap}
+header .controls{display:flex;align-items:center;gap:8px;margin-left:auto}
+header button,header label{font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);cursor:pointer;white-space:nowrap}
+header button:hover,header label:hover{border-color:var(--accent)}
+header button.active{background:var(--accent);color:#1e1e2e;border-color:var(--accent)}
+header .sep{width:1px;height:20px;background:var(--border)}
+header .info{font-size:11px;color:var(--dim)}
+.main{display:flex;flex:1;overflow:hidden}
+.editor-pane{width:380px;min-width:200px;display:flex;flex-direction:column;border-right:1px solid var(--border);flex-shrink:0}
+.editor-pane textarea{flex:1;background:var(--bg);color:var(--text);border:none;padding:12px;font-family:'JetBrains Mono','Fira Code',monospace;font-size:12px;resize:none;outline:none;tab-size:2}
+.editor-pane .actions{display:flex;gap:6px;padding:8px;background:var(--surface);border-top:1px solid var(--border)}
+.editor-pane .actions button{flex:1;padding:6px;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600}
+.editor-pane .actions .render-btn{background:var(--accent);color:#1e1e2e}
+.editor-pane .actions .clear-btn{background:var(--surface);color:var(--dim);border:1px solid var(--border)}
+.preview-pane{flex:1;overflow:auto;background:#181825;display:flex;align-items:flex-start;justify-content:center;padding:20px}
+.canvas-wrapper{position:relative;box-shadow:0 4px 24px rgba(0,0,0,.4);background:#fff}
+.canvas-wrapper.dark-bg{background:#1a1a2e}
+/* Component outlines toggle */
+.show-outlines [data-pvtype]{outline:1px dashed rgba(137,180,250,.3)}
+.show-outlines [data-pvtype]:hover{outline:1px solid var(--accent)}
+/* Tooltip */
+[data-pvtype]{position:relative}
+[data-pvtype]:hover::after{content:attr(data-pvtype);position:absolute;top:-22px;left:0;font-size:10px;background:rgba(0,0,0,.85);color:#fff;padding:2px 6px;border-radius:3px;white-space:nowrap;z-index:9999;pointer-events:none}
+/* Placeholder boxes */
+.pv-placeholder{display:flex;align-items:center;justify-content:center;border:1px dashed var(--border);color:var(--dim);font-size:11px;font-family:monospace;text-align:center;overflow:hidden;min-height:24px}
+.pv-placeholder.embedded{border-color:var(--accent);color:var(--accent);background:rgba(137,180,250,.05)}
+.pv-placeholder.chart{background:rgba(108,112,134,.1)}
+/* Error */
+.error-msg{color:var(--red);padding:20px;font-family:monospace;font-size:13px;white-space:pre-wrap}
+/* Resize handle */
+.resize-handle{width:5px;cursor:col-resize;background:var(--border);flex-shrink:0}
+.resize-handle:hover{background:var(--accent)}
+/* File drop zone */
+.editor-pane textarea.drag-over{background:rgba(137,180,250,.1);border:2px dashed var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Perspective Viewer</h1>
+  <div class="sep"></div>
+  <label id="fileLabel" style="display:flex;align-items:center;gap:4px;border:none;padding:0">
+    <input type="file" id="fileInput" accept=".json" style="display:none">
+    <span style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;cursor:pointer">Load JSON</span>
+  </label>
+  <div class="sep"></div>
+  <div class="controls">
+    <button id="btnOutlines" title="Toggle component outlines">Outlines</button>
+    <button id="btnDark" title="Toggle dark canvas background">Dark BG</button>
+    <button id="btnFit" title="Fit view to pane">Fit</button>
+    <div class="sep"></div>
+    <span class="info" id="sizeInfo">--</span>
+  </div>
+</header>
+<div class="main">
+  <div class="editor-pane" id="editorPane">
+    <textarea id="jsonInput" spellcheck="false" placeholder="Paste Perspective view JSON here...&#10;&#10;Or drag &amp; drop a .json file&#10;&#10;Or use ?file=path to auto-load&#10;&#10;Ctrl/Cmd+Enter to render"></textarea>
+    <div class="actions">
+      <button class="render-btn" id="btnRender">Render</button>
+      <button class="clear-btn" id="btnClear">Clear</button>
+    </div>
+  </div>
+  <div class="resize-handle" id="resizeHandle"></div>
+  <div class="preview-pane" id="previewPane">
+    <div class="canvas-wrapper" id="canvas"></div>
+  </div>
+</div>
+
+<script>
+(function() {
+'use strict';
+
+// ---- State ----
+let viewData = null;
+let showOutlines = false;
+let darkBg = true;
+let fitMode = false;
+
+// ---- DOM ----
+const $ = s => document.querySelector(s);
+const jsonInput = $('#jsonInput');
+const canvas = $('#canvas');
+const previewPane = $('#previewPane');
+const sizeInfo = $('#sizeInfo');
+
+// ---- Utility ----
+let _uid = 0;
+function uid() { return ++_uid; }
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+function createEl(tag, attrs, children) {
+  const el = document.createElement(tag);
+  if (attrs) {
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === 'style' && typeof v === 'string') el.style.cssText = v;
+      else if (k === 'className') el.className = v;
+      else if (k === 'textContent') el.textContent = v;
+      else el.setAttribute(k, v);
+    }
+  }
+  if (children) {
+    if (typeof children === 'string') el.textContent = children;
+    else if (Array.isArray(children)) children.forEach(c => { if (c) el.appendChild(c); });
+    else el.appendChild(children);
+  }
+  return el;
+}
+
+function createSvgEl(tag, attrs, children) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  if (attrs) {
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v !== undefined && v !== null) el.setAttribute(k, String(v));
+    }
+  }
+  if (children) {
+    if (Array.isArray(children)) children.forEach(c => { if (c) el.appendChild(c); });
+    else el.appendChild(children);
+  }
+  return el;
+}
+
+// ---- Style mapping: camelCase prop -> CSS property ----
+const STYLE_MAP = {
+  backgroundColor:'background-color', fontSize:'font-size', fontWeight:'font-weight',
+  fontStyle:'font-style', fontFamily:'font-family', textAlign:'text-align',
+  textDecoration:'text-decoration', textTransform:'text-transform',
+  lineHeight:'line-height', letterSpacing:'letter-spacing',
+  borderRadius:'border-radius', borderWidth:'border-width',
+  borderColor:'border-color', borderStyle:'border-style',
+  borderTop:'border-top', borderBottom:'border-bottom',
+  borderLeft:'border-left', borderRight:'border-right',
+  paddingTop:'padding-top', paddingBottom:'padding-bottom',
+  paddingLeft:'padding-left', paddingRight:'padding-right',
+  marginTop:'margin-top', marginBottom:'margin-bottom',
+  marginLeft:'margin-left', marginRight:'margin-right',
+  boxShadow:'box-shadow', opacity:'opacity',
+  minWidth:'min-width', minHeight:'min-height',
+  maxWidth:'max-width', maxHeight:'max-height',
+  whiteSpace:'white-space', wordBreak:'word-break',
+  overflowX:'overflow-x', overflowY:'overflow-y',
+  flexDirection:'flex-direction', justifyContent:'justify-content',
+  alignItems:'align-items', alignSelf:'align-self',
+  flexWrap:'flex-wrap', flexGrow:'flex-grow', flexShrink:'flex-shrink',
+  flexBasis:'flex-basis', columnGap:'column-gap', rowGap:'row-gap',
+  backgroundImage:'background-image', backgroundSize:'background-size',
+  backgroundPosition:'background-position', backgroundRepeat:'background-repeat',
+  transformOrigin:'transform-origin', zIndex:'z-index',
+};
+
+function applyStyle(el, styleObj) {
+  if (!styleObj) return;
+  for (const [k, v] of Object.entries(styleObj)) {
+    if (k === 'classes') continue;
+    const prop = STYLE_MAP[k] || k.replace(/([A-Z])/g, '-$1').toLowerCase();
+    el.style.setProperty(prop, String(v));
+  }
+}
+
+// ---- SVG style mapping ----
+function applySvgStyle(el, styleObj) {
+  if (!styleObj) return;
+  const map = {fill:'fill', stroke:'stroke', strokeWidth:'stroke-width',
+    strokeDasharray:'stroke-dasharray', strokeLinecap:'stroke-linecap',
+    strokeLinejoin:'stroke-linejoin', opacity:'opacity',
+    fillOpacity:'fill-opacity', strokeOpacity:'stroke-opacity'};
+  for (const [k, v] of Object.entries(styleObj)) {
+    if (map[k]) el.setAttribute(map[k], String(v));
+  }
+}
+
+// ---- Position detection for coord containers ----
+function isPercentMode(pos) {
+  if (!pos) return false;
+  const vals = [pos.x, pos.y, pos.width, pos.height].filter(v => v !== undefined);
+  if (vals.length === 0) return false;
+  return vals.every(v => typeof v === 'number' && v >= 0 && v <= 1);
+}
+
+function applyPosition(el, pos, parentType) {
+  if (!pos) return;
+
+  // Flex child
+  if (parentType === 'ia.container.flex') {
+    const grow = pos.grow ?? 0;
+    const shrink = pos.shrink ?? 1;
+    const basis = pos.basis || 'auto';
+    el.style.flex = `${grow} ${shrink} ${basis}`;
+    if (pos.alignSelf) el.style.alignSelf = pos.alignSelf;
+    return;
+  }
+
+  // Column child
+  if (parentType === 'ia.container.column') {
+    const bp = pos.breakpoints;
+    if (bp && bp.length > 0) {
+      const span = bp[0].span || 12;
+      el.style.width = (span / 12 * 100).toFixed(4) + '%';
+    }
+    if (pos.height) el.style.height = pos.height + 'px';
+    el.style.display = 'inline-block';
+    el.style.verticalAlign = 'top';
+    return;
+  }
+
+  // Split child
+  if (parentType === 'ia.container.split') {
+    el.style.flex = '1';
+    el.style.overflow = 'hidden';
+    return;
+  }
+
+  // Coord child
+  if (parentType === 'ia.container.coord') {
+    el.style.position = 'absolute';
+    if (isPercentMode(pos)) {
+      if (pos.x !== undefined) el.style.left = (pos.x * 100).toFixed(2) + '%';
+      if (pos.y !== undefined) el.style.top = (pos.y * 100).toFixed(2) + '%';
+      if (pos.width !== undefined) el.style.width = (pos.width * 100).toFixed(2) + '%';
+      if (pos.height !== undefined) el.style.height = (pos.height * 100).toFixed(2) + '%';
+    } else {
+      if (pos.x !== undefined) el.style.left = pos.x + 'px';
+      if (pos.y !== undefined) el.style.top = pos.y + 'px';
+      if (pos.width !== undefined) el.style.width = pos.width + 'px';
+      if (pos.height !== undefined) el.style.height = pos.height + 'px';
+    }
+    return;
+  }
+}
+
+// ---- Rotation ----
+function applyRotation(el, pos) {
+  if (!pos || !pos.rotate) return;
+  const r = pos.rotate;
+  if (r.angle !== undefined) el.style.transform = `rotate(${r.angle}deg)`;
+  if (r.anchor) el.style.transformOrigin = r.anchor;
+}
+
+// ---- Component rendering (returns DOM element) ----
+function renderComponent(node, parentType) {
+  if (!node) return null;
+  const type = node.type || '';
+  const props = node.props || {};
+  const meta = node.meta || {};
+  const pos = node.position || {};
+  const children = node.children || [];
+  const name = meta.name || '';
+  const tip = type + (name ? ' (' + name + ')' : '');
+
+  // Drawing container children are SVG elements
+  if (parentType === 'ia.container.drawing') {
+    return renderSvgElement(node);
+  }
+
+  // Shapes outside drawing container
+  if (type.startsWith('ia.shapes.')) {
+    return renderShapeAsInlineSvg(node, parentType, tip);
+  }
+
+  // Container types
+  if (type === 'ia.container.coord') return renderCoord(node, parentType, tip);
+  if (type === 'ia.container.flex') return renderFlex(node, parentType, tip);
+  if (type === 'ia.container.column') return renderColumn(node, parentType, tip);
+  if (type === 'ia.container.drawing') return renderDrawing(node, parentType, tip);
+  if (type === 'ia.container.breakpt') return renderBreakpoint(node, parentType, tip);
+  if (type === 'ia.container.tab') return renderTab(node, parentType, tip);
+  if (type === 'ia.container.split') return renderSplit(node, parentType, tip);
+
+  // Symbols
+  if (type === 'ia.symbol.vessel') return renderVessel(node, parentType, tip);
+  if (type === 'ia.symbol.pump') return renderPump(node, parentType, tip);
+  if (type === 'ia.symbol.valve') return renderValve(node, parentType, tip);
+  if (type === 'ia.symbol.motor') return renderMotor(node, parentType, tip);
+  if (type === 'ia.symbol.sensor') return renderSensor(node, parentType, tip);
+
+  // Display components
+  if (type === 'ia.display.label') return renderLabel(node, parentType, tip);
+  if (type === 'ia.display.icon') return renderIcon(node, parentType, tip);
+  if (type === 'ia.display.image') return renderImage(node, parentType, tip);
+  if (type === 'ia.display.markdown') return renderMarkdown(node, parentType, tip);
+  if (type === 'ia.display.view') return renderEmbeddedView(node, parentType, tip);
+  if (type === 'ia.display.flex-repeater') return renderRepeater(node, parentType, tip);
+  if (type === 'ia.display.sparkline') return renderSparkline(node, parentType, tip);
+  if (type === 'ia.display.table') return makePlaceholder(node, parentType, tip, 'Table');
+  if (type === 'ia.display.iframe') return makePlaceholder(node, parentType, tip, 'IFrame');
+
+  // Input components
+  if (type === 'ia.input.button') return renderButton(node, parentType, tip);
+  if (type === 'ia.input.text-field') return renderTextField(node, parentType, tip);
+  if (type === 'ia.input.dropdown') return renderDropdown(node, parentType, tip);
+
+  // Chart types
+  if (type.startsWith('ia.chart.')) return makePlaceholder(node, parentType, tip, type.split('.').pop());
+
+  // Alarm components
+  if (type.startsWith('ia.alarm.')) return makePlaceholder(node, parentType, tip, type.split('.').pop());
+
+  // Unknown type with children
+  if (children.length > 0) {
+    const el = createEl('div');
+    el.setAttribute('data-pvtype', tip);
+    applyPosition(el, pos, parentType);
+    applyStyle(el, props.style);
+    applyRotation(el, pos);
+    children.forEach(c => {
+      const child = renderComponent(c, type);
+      if (child) el.appendChild(child);
+    });
+    return el;
+  }
+
+  return makePlaceholder(node, parentType, tip, type.split('.').pop() || 'unknown');
+}
+
+// ---- Containers ----
+function renderCoord(node, parentType, tip) {
+  const props = node.props || {};
+  const pos = node.position || {};
+  const children = node.children || [];
+  const el = createEl('div');
+  el.setAttribute('data-pvtype', tip);
+  applyPosition(el, pos, parentType);
+  el.style.position = 'relative';
+  applyStyle(el, props.style);
+  applyRotation(el, pos);
+  if (!el.style.width && !el.style.flex) {
+    el.style.width = '100%';
+    el.style.height = '100%';
+  }
+  children.forEach(c => {
+    const child = renderComponent(c, 'ia.container.coord');
+    if (child) el.appendChild(child);
+  });
+  return el;
+}
+
+function renderFlex(node, parentType, tip) {
+  const props = node.props || {};
+  const pos = node.position || {};
+  const children = node.children || [];
+  const el = createEl('div');
+  el.setAttribute('data-pvtype', tip);
+  applyPosition(el, pos, parentType);
+  el.style.display = 'flex';
+  el.style.flexDirection = props.direction || 'row';
+  applyStyle(el, props.style);
+  applyRotation(el, pos);
+  children.forEach(c => {
+    const child = renderComponent(c, 'ia.container.flex');
+    if (child) el.appendChild(child);
+  });
+  return el;
+}
+
+function renderColumn(node, parentType, tip) {
+  const props = node.props || {};
+  const pos = node.position || {};
+  const children = node.children || [];
+  const el = createEl('div');
+  el.setAttribute('data-pvtype', tip);
+  applyPosition(el, pos, parentType);
+  el.style.display = 'flex';
+  el.style.flexWrap = 'wrap';
+  applyStyle(el, props.style);
+  applyRotation(el, pos);
+  children.forEach(c => {
+    const child = renderComponent(c, 'ia.container.column');
+    if (child) el.appendChild(child);
+  });
+  return el;
+}
+
+function renderDrawing(node, parentType, tip) {
+  const props = node.props || {};
+  const pos = node.position || {};
+  const children = node.children || [];
+
+  const el = createEl('div');
+  el.setAttribute('data-pvtype', tip);
+  applyPosition(el, pos, parentType);
+  applyRotation(el, pos);
+  el.style.overflow = 'hidden';
+
+  const viewBox = props.viewBox || '0 0 100 100';
+  const par = props.preserveAspectRatio || 'xMidYMid meet';
+
+  const svg = createSvgEl('svg', {viewBox: viewBox, preserveAspectRatio: par});
+  svg.style.width = '100%';
+  svg.style.height = '100%';
+  svg.style.display = 'block';
+
+  // Apply drawing-level fill/stroke from props.style
+  if (props.style) {
+    applySvgStyle(svg, props.style);
+  }
+
+  children.forEach(c => {
+    const child = renderSvgElement(c);
+    if (child) svg.appendChild(child);
+  });
+
+  el.appendChild(svg);
+  return el;
+}
+
+function renderBreakpoint(node, parentType, tip) {
+  const pos = node.position || {};
+  const children = node.children || [];
+  const el = createEl('div');
+  el.setAttribute('data-pvtype', tip);
+  applyPosition(el, pos, parentType);
+  applyStyle(el, (node.props || {}).style);
+  if (children.length > 0) {
+    const child = renderComponent(children[0], 'ia.container.breakpt');
+    if (child) el.appendChild(child);
+  } else {
+    el.textContent = 'Breakpoint (empty)';
+    el.className = 'pv-placeholder';
+  }
+  return el;
+}
+
+function renderTab(node, parentType, tip) {
+  const props = node.props || {};
+  const pos = node.position || {};
+  const children = node.children || [];
+  const tabs = props.tabs || [];
+  const idx = props.currentTabIndex || 0;
+
+  const el = createEl('div');
+  el.setAttribute('data-pvtype', tip);
+  applyPosition(el, pos, parentType);
+  applyStyle(el, props.style);
+
+  if (tabs.length > 0) {
+    const tabBar = createEl('div', {style: 'display:flex;border-bottom:1px solid #555;font-size:11px'});
+    tabs.forEach((t, i) => {
+      const tabEl = createEl('div', {
+        style: 'padding:4px 10px;cursor:default;' +
+          (i === idx ? 'background:rgba(137,180,250,.15);color:#89b4fa;font-weight:600' : 'color:#888')
+      });
+      tabEl.textContent = String(t);
+      tabBar.appendChild(tabEl);
+    });
+    el.appendChild(tabBar);
+  }
+
+  if (children.length > idx) {
+    const child = renderComponent(children[idx], 'ia.container.tab');
+    if (child) el.appendChild(child);
+  }
+  return el;
+}
+
+function renderSplit(node, parentType, tip) {
+  const props = node.props || {};
+  const pos = node.position || {};
+  const children = node.children || [];
+
+  const el = createEl('div');
+  el.setAttribute('data-pvtype', tip);
+  applyPosition(el, pos, parentType);
+  el.style.display = 'flex';
+  applyStyle(el, props.style);
+
+  children.forEach((c, i) => {
+    if (i > 0) {
+      el.appendChild(createEl('div', {style: 'width:4px;background:#555;flex-shrink:0'}));
+    }
+    const child = renderComponent(c, 'ia.container.split');
+    if (child) el.appendChild(child);
+  });
+  return el;
+}
+
+// ---- SVG elements (inside drawing containers) ----
+function renderSvgElement(node) {
+  if (!node) return null;
+  const type = node.type || '';
+  const props = node.props || {};
+  const children = node.children || [];
+
+  if (type === 'ia.shapes.path') {
+    const d = props.path || props.d || '';
+    const el = createSvgEl('path', {d: d});
+    // Handle fill which can be string, paint object, or style
+    if (props.fill !== undefined) {
+      if (typeof props.fill === 'string') el.setAttribute('fill', props.fill);
+      else if (props.fill && typeof props.fill.paint === 'string') el.setAttribute('fill', props.fill.paint);
+      else el.setAttribute('fill', '#888');
+    }
+    if (props.stroke) el.setAttribute('stroke', props.stroke);
+    if (props.style) applySvgStyle(el, props.style);
+    return el;
+  }
+
+  if (type === 'ia.shapes.rect') {
+    const el = createSvgEl('rect', {
+      x: props.x ?? 0, y: props.y ?? 0,
+      width: props.width ?? 100, height: props.height ?? 100,
+      rx: props.rx ?? 0
+    });
+    if (props.style) applySvgStyle(el, props.style);
+    return el;
+  }
+
+  if (type === 'ia.shapes.circle') {
+    const el = createSvgEl('circle', {
+      cx: props.cx ?? 50, cy: props.cy ?? 50, r: props.r ?? 48
+    });
+    if (props.style) applySvgStyle(el, props.style);
+    return el;
+  }
+
+  if (type === 'ia.shapes.ellipse') {
+    const el = createSvgEl('ellipse', {
+      cx: props.cx ?? 50, cy: props.cy ?? 50,
+      rx: props.rx ?? 50, ry: props.ry ?? 30
+    });
+    if (props.style) applySvgStyle(el, props.style);
+    return el;
+  }
+
+  if (type === 'ia.shapes.polygon') {
+    const el = createSvgEl('polygon', {points: props.points || ''});
+    if (props.style) applySvgStyle(el, props.style);
+    return el;
+  }
+
+  if (type === 'ia.shapes.line') {
+    const el = createSvgEl('line', {
+      x1: props.x1 ?? 0, y1: props.y1 ?? 0,
+      x2: props.x2 ?? 100, y2: props.y2 ?? 100
+    });
+    if (props.style) applySvgStyle(el, props.style);
+    return el;
+  }
+
+  if (type === 'ia.shapes.group') {
+    const el = createSvgEl('g');
+    if (props.transform) el.setAttribute('transform', props.transform);
+    if (props.style) applySvgStyle(el, props.style);
+    children.forEach(c => {
+      const child = renderSvgElement(c);
+      if (child) el.appendChild(child);
+    });
+    return el;
+  }
+
+  if (type === 'ia.shapes.svg') {
+    const el = createSvgEl('svg');
+    if (props.viewBox) el.setAttribute('viewBox', props.viewBox);
+    if (props.style) applySvgStyle(el, props.style);
+    children.forEach(c => {
+      const child = renderSvgElement(c);
+      if (child) el.appendChild(child);
+    });
+    // Also handle elements[] array
+    if (props.elements) {
+      props.elements.forEach(e => {
+        const child = renderSvgElement(e);
+        if (child) el.appendChild(child);
+      });
+    }
+    return el;
+  }
+
+  // Fallback: group with children
+  if (children.length > 0) {
+    const el = createSvgEl('g');
+    if (props.style) applySvgStyle(el, props.style);
+    children.forEach(c => {
+      const child = renderSvgElement(c);
+      if (child) el.appendChild(child);
+    });
+    return el;
+  }
+  return null;
+}
+
+function renderShapeAsInlineSvg(node, parentType, tip) {
+  const pos = node.position || {};
+  const el = createEl('div');
+  el.setAttribute('data-pvtype', tip);
+  applyPosition(el, pos, parentType);
+  el.style.overflow = 'hidden';
+  const svg = createSvgEl('svg', {viewBox: '0 0 100 100'});
+  svg.style.width = '100%';
+  svg.style.height = '100%';
+  const shape = renderSvgElement(node);
+  if (shape) svg.appendChild(shape);
+  el.appendChild(svg);
+  return el;
+}
+
+// ---- Symbols ----
+function renderVessel(node, parentType, tip) {
+  const props = node.props || {};
+  const pos = node.position || {};
+  const level = props.level ?? 50;
+  const lbl = props.label?.text || '';
+  const val = props.value?.text || '';
+  const color = props.liquidColor || '#1976d2';
+  const state = props.state || 'stopped';
+  const running = state === 'running';
+  const fillY = 100 - level;
+  const id = 'vc' + uid();
+
+  const el = createEl('div');
+  el.setAttribute('data-pvtype', tip);
+  applyPosition(el, pos, parentType);
+  applyStyle(el, props.style);
+  applyRotation(el, pos);
+  el.style.display = 'flex';
+  el.style.flexDirection = 'column';
+  el.style.alignItems = 'center';
+
+  const svg = createSvgEl('svg', {viewBox: '0 0 100 120'});
+  svg.style.flex = '1';
+  svg.style.width = '100%';
+
+  const clipPath = createSvgEl('clipPath', {id: id});
+  clipPath.appendChild(createSvgEl('rect', {x:5, y:5, width:90, height:100, rx:8}));
+  const defs = createSvgEl('defs');
+  defs.appendChild(clipPath);
+  svg.appendChild(defs);
+
+  svg.appendChild(createSvgEl('rect', {x:5, y:5, width:90, height:100, rx:8,
+    fill:'none', stroke: running ? color : '#666', 'stroke-width':'2.5'}));
+  svg.appendChild(createSvgEl('rect', {x:5, y: 5 + fillY, width:90, height: 100 - fillY,
+    fill: color, opacity:'0.35', 'clip-path': 'url(#' + id + ')'}));
+
+  const valText = createSvgEl('text', {x:50, y:60, 'text-anchor':'middle',
+    'dominant-baseline':'middle', fill: running ? '#fff' : '#aaa',
+    'font-size':'12', 'font-weight':'bold'});
+  valText.textContent = val;
+  svg.appendChild(valText);
+
+  const lblText = createSvgEl('text', {x:50, y:115, 'text-anchor':'middle',
+    fill: running ? color : '#888', 'font-size':'9', 'font-weight':'600'});
+  lblText.textContent = lbl;
+  svg.appendChild(lblText);
+
+  el.appendChild(svg);
+  return el;
+}
+
+function renderPump(node, parentType, tip) {
+  const props = node.props || {};
+  const pos = node.position || {};
+  const lbl = props.label?.text || '';
+  const val = props.value?.text || '';
+  const state = props.state || 'stopped';
+  const running = state === 'running';
+  const clr = running ? '#4caf50' : '#666';
+
+  const el = createEl('div');
+  el.setAttribute('data-pvtype', tip);
+  applyPosition(el, pos, parentType);
+  applyStyle(el, props.style);
+  applyRotation(el, pos);
+  el.style.display = 'flex';
+  el.style.flexDirection = 'column';
+  el.style.alignItems = 'center';
+
+  const svg = createSvgEl('svg', {viewBox: '0 0 100 100'});
+  svg.style.flex = '1';
+  svg.style.width = '100%';
+
+  svg.appendChild(createSvgEl('circle', {cx:50, cy:45, r:30, fill:'none', stroke:clr, 'stroke-width':'2.5'}));
+  svg.appendChild(createSvgEl('polygon', {points:'50,20 75,55 25,55', fill:clr, opacity:'0.5'}));
+
+  const valText = createSvgEl('text', {x:50, y:50, 'text-anchor':'middle',
+    'dominant-baseline':'middle', fill:'#fff', 'font-size':'9'});
+  valText.textContent = val;
+  svg.appendChild(valText);
+
+  const lblText = createSvgEl('text', {x:50, y:90, 'text-anchor':'middle',
+    fill:clr, 'font-size':'9', 'font-weight':'600'});
+  lblText.textContent = lbl;
+  svg.appendChild(lblText);
+
+  el.appendChild(svg);
+  return el;
+}
+
+function renderValve(node, parentType, tip) {
+  const props = node.props || {};
+  const pos = node.position || {};
+  const lbl = props.label?.text || '';
+  const state = props.state || 'closed';
+  const open = state === 'open';
+  const clr = open ? '#4caf50' : '#f44336';
+
+  const el = createEl('div');
+  el.setAttribute('data-pvtype', tip);
+  applyPosition(el, pos, parentType);
+  applyStyle(el, props.style);
+  applyRotation(el, pos);
+  el.style.display = 'flex';
+  el.style.flexDirection = 'column';
+  el.style.alignItems = 'center';
+
+  const svg = createSvgEl('svg', {viewBox: '0 0 100 90'});
+  svg.style.flex = '1';
+  svg.style.width = '100%';
+
+  svg.appendChild(createSvgEl('polygon', {points:'10,15 50,45 10,45', fill:clr, opacity:'0.5', stroke:clr, 'stroke-width':'1.5'}));
+  svg.appendChild(createSvgEl('polygon', {points:'90,15 50,45 90,45', fill:clr, opacity:'0.5', stroke:clr, 'stroke-width':'1.5'}));
+  svg.appendChild(createSvgEl('line', {x1:50, y1:15, x2:50, y2:5, stroke:clr, 'stroke-width':'2'}));
+  svg.appendChild(createSvgEl('rect', {x:35, y:2, width:30, height:8, rx:2, fill:clr, opacity:'0.7'}));
+
+  const lblText = createSvgEl('text', {x:50, y:70, 'text-anchor':'middle',
+    fill:clr, 'font-size':'9', 'font-weight':'600'});
+  lblText.textContent = lbl;
+  svg.appendChild(lblText);
+
+  el.appendChild(svg);
+  return el;
+}
+
+function renderMotor(node, parentType, tip) {
+  const props = node.props || {};
+  const pos = node.position || {};
+  const lbl = props.label?.text || '';
+  const state = props.state || 'stopped';
+  const clr = state === 'running' ? '#4caf50' : '#666';
+
+  const el = createEl('div');
+  el.setAttribute('data-pvtype', tip);
+  applyPosition(el, pos, parentType);
+  applyStyle(el, props.style);
+  applyRotation(el, pos);
+  el.style.display = 'flex';
+  el.style.flexDirection = 'column';
+  el.style.alignItems = 'center';
+
+  const svg = createSvgEl('svg', {viewBox: '0 0 80 90'});
+  svg.style.flex = '1';
+  svg.style.width = '100%';
+
+  svg.appendChild(createSvgEl('circle', {cx:40, cy:40, r:28, fill:'none', stroke:clr, 'stroke-width':'2.5'}));
+  const mText = createSvgEl('text', {x:40, y:44, 'text-anchor':'middle',
+    'dominant-baseline':'middle', fill:clr, 'font-size':'22', 'font-weight':'bold'});
+  mText.textContent = 'M';
+  svg.appendChild(mText);
+
+  const lblText = createSvgEl('text', {x:40, y:80, 'text-anchor':'middle',
+    fill:clr, 'font-size':'9', 'font-weight':'600'});
+  lblText.textContent = lbl;
+  svg.appendChild(lblText);
+
+  el.appendChild(svg);
+  return el;
+}
+
+function renderSensor(node, parentType, tip) {
+  const props = node.props || {};
+  const pos = node.position || {};
+  const lbl = props.label?.text || '';
+  const val = props.value?.text || '';
+  const clr = '#2196f3';
+
+  const el = createEl('div');
+  el.setAttribute('data-pvtype', tip);
+  applyPosition(el, pos, parentType);
+  applyStyle(el, props.style);
+  applyRotation(el, pos);
+  el.style.display = 'flex';
+  el.style.flexDirection = 'column';
+  el.style.alignItems = 'center';
+
+  const svg = createSvgEl('svg', {viewBox: '0 0 80 90'});
+  svg.style.flex = '1';
+  svg.style.width = '100%';
+
+  svg.appendChild(createSvgEl('circle', {cx:40, cy:40, r:28, fill:'none', stroke:clr, 'stroke-width':'2'}));
+  const sText = createSvgEl('text', {x:40, y:38, 'text-anchor':'middle',
+    'dominant-baseline':'middle', fill:clr, 'font-size':'18', 'font-weight':'bold'});
+  sText.textContent = 'S';
+  svg.appendChild(sText);
+
+  const valText = createSvgEl('text', {x:40, y:52, 'text-anchor':'middle', fill:'#aaa', 'font-size':'8'});
+  valText.textContent = val;
+  svg.appendChild(valText);
+
+  const lblText = createSvgEl('text', {x:40, y:80, 'text-anchor':'middle',
+    fill:clr, 'font-size':'9', 'font-weight':'600'});
+  lblText.textContent = lbl;
+  svg.appendChild(lblText);
+
+  el.appendChild(svg);
+  return el;
+}
+
+// ---- Display components ----
+function renderLabel(node, parentType, tip) {
+  const props = node.props || {};
+  const pos = node.position || {};
+  const el = createEl('div');
+  el.setAttribute('data-pvtype', tip);
+  applyPosition(el, pos, parentType);
+  el.style.display = 'flex';
+  el.style.alignItems = 'center';
+  el.style.overflow = 'hidden';
+  applyStyle(el, props.style);
+  applyRotation(el, pos);
+  const ta = props.style?.textAlign;
+  if (ta === 'center') el.style.justifyContent = 'center';
+  else if (ta === 'right') el.style.justifyContent = 'flex-end';
+  if (!el.style.fontSize) el.style.fontSize = '14px';
+  el.textContent = String(props.text ?? '');
+  return el;
+}
+
+function renderIcon(node, parentType, tip) {
+  const props = node.props || {};
+  const pos = node.position || {};
+  const el = createEl('div');
+  el.setAttribute('data-pvtype', tip);
+  el.className = 'pv-placeholder';
+  applyPosition(el, pos, parentType);
+  applyStyle(el, props.style);
+  const span = createEl('span', {style: 'font-size:10px;opacity:.6'});
+  span.textContent = props.path || props.icon || '?';
+  el.appendChild(span);
+  return el;
+}
+
+function renderImage(node, parentType, tip) {
+  const props = node.props || {};
+  const pos = node.position || {};
+  const src = props.source || props.src || '';
+  const el = createEl('div');
+  el.setAttribute('data-pvtype', tip);
+  applyPosition(el, pos, parentType);
+  applyStyle(el, props.style);
+  el.style.overflow = 'hidden';
+
+  if (src && (src.startsWith('http') || src.startsWith('/'))) {
+    const img = createEl('img');
+    img.src = src;
+    img.style.cssText = 'width:100%;height:100%;object-fit:contain';
+    img.onerror = function() {
+      const ph = createEl('div');
+      ph.className = 'pv-placeholder';
+      ph.style.cssText = 'width:100%;height:100%';
+      ph.textContent = 'Image: ' + src;
+      el.replaceChild(ph, img);
+    };
+    el.appendChild(img);
+  } else {
+    el.className = 'pv-placeholder';
+    el.textContent = 'Image: ' + (src || '(no src)');
+  }
+  return el;
+}
+
+function renderMarkdown(node, parentType, tip) {
+  const props = node.props || {};
+  const pos = node.position || {};
+  const el = createEl('div');
+  el.setAttribute('data-pvtype', tip);
+  applyPosition(el, pos, parentType);
+  applyStyle(el, props.style);
+  el.style.whiteSpace = 'pre-wrap';
+  el.style.fontSize = '13px';
+  el.style.padding = '8px';
+  el.style.overflow = 'auto';
+  el.textContent = props.source || props.text || '';
+  return el;
+}
+
+function renderEmbeddedView(node, parentType, tip) {
+  const props = node.props || {};
+  const pos = node.position || {};
+  const el = createEl('div');
+  el.setAttribute('data-pvtype', tip);
+  el.className = 'pv-placeholder embedded';
+  applyPosition(el, pos, parentType);
+  applyStyle(el, props.style);
+  el.textContent = 'Embedded: ' + (props.path || '?');
+  return el;
+}
+
+function renderRepeater(node, parentType, tip) {
+  const props = node.props || {};
+  const pos = node.position || {};
+  const el = createEl('div');
+  el.setAttribute('data-pvtype', tip);
+  el.className = 'pv-placeholder embedded';
+  applyPosition(el, pos, parentType);
+  applyStyle(el, props.style);
+  el.textContent = 'Repeater: ' + (props.path || '?');
+  return el;
+}
+
+function renderSparkline(node, parentType, tip) {
+  const props = node.props || {};
+  const pos = node.position || {};
+  const points = props.points || [];
+
+  const el = createEl('div');
+  el.setAttribute('data-pvtype', tip);
+  applyPosition(el, pos, parentType);
+  applyStyle(el, props.style);
+  el.style.overflow = 'hidden';
+
+  if (points.length > 1) {
+    const max = Math.max(...points);
+    const min = Math.min(...points);
+    const range = max - min || 1;
+    const w = 100, h = 30;
+    const step = w / (points.length - 1);
+    const d = points.map((v, i) => {
+      const x = i * step;
+      const y = h - ((v - min) / range) * h;
+      return (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1);
+    }).join(' ');
+
+    const svg = createSvgEl('svg', {viewBox: '0 0 ' + w + ' ' + h, preserveAspectRatio: 'none'});
+    svg.style.width = '100%';
+    svg.style.height = '100%';
+    svg.appendChild(createSvgEl('path', {d: d, fill:'none', stroke:'#89b4fa', 'stroke-width':'1.5'}));
+    el.appendChild(svg);
+  } else {
+    el.className = 'pv-placeholder';
+    el.textContent = 'Sparkline';
+  }
+  return el;
+}
+
+function makePlaceholder(node, parentType, tip, label) {
+  const props = node.props || {};
+  const pos = node.position || {};
+  const el = createEl('div');
+  el.setAttribute('data-pvtype', tip);
+  el.className = 'pv-placeholder';
+  applyPosition(el, pos, parentType);
+  applyStyle(el, props.style);
+  el.textContent = label || 'unknown';
+  return el;
+}
+
+// ---- Input components ----
+function renderButton(node, parentType, tip) {
+  const props = node.props || {};
+  const pos = node.position || {};
+  const el = createEl('div');
+  el.setAttribute('data-pvtype', tip);
+  applyPosition(el, pos, parentType);
+
+  const btn = createEl('button');
+  btn.style.cssText = 'width:100%;height:100%;cursor:default;border:1px solid #555;border-radius:4px;background:#333;color:#eee;font-size:13px';
+  applyStyle(btn, props.style);
+  btn.textContent = props.text || 'Button';
+  el.appendChild(btn);
+  return el;
+}
+
+function renderTextField(node, parentType, tip) {
+  const props = node.props || {};
+  const pos = node.position || {};
+  const el = createEl('div');
+  el.setAttribute('data-pvtype', tip);
+  applyPosition(el, pos, parentType);
+
+  const input = createEl('input');
+  input.type = 'text';
+  input.readOnly = true;
+  input.placeholder = props.placeholder || '';
+  input.style.cssText = 'width:100%;height:100%;background:#2a2a3c;color:#ccc;border:1px solid #555;border-radius:4px;padding:4px 8px;font-size:13px;box-sizing:border-box';
+  el.appendChild(input);
+  return el;
+}
+
+function renderDropdown(node, parentType, tip) {
+  const props = node.props || {};
+  const pos = node.position || {};
+  const options = props.options || [];
+  const el = createEl('div');
+  el.setAttribute('data-pvtype', tip);
+  applyPosition(el, pos, parentType);
+
+  const select = createEl('select');
+  select.disabled = true;
+  select.style.cssText = 'width:100%;height:100%;background:#2a2a3c;color:#ccc;border:1px solid #555;border-radius:4px;padding:4px;font-size:13px';
+
+  if (options.length === 0) {
+    const opt = createEl('option');
+    opt.textContent = '--';
+    select.appendChild(opt);
+  } else {
+    options.forEach(o => {
+      const opt = createEl('option');
+      opt.textContent = typeof o === 'string' ? o : (o.label || o.value || '');
+      select.appendChild(opt);
+    });
+  }
+  el.appendChild(select);
+  return el;
+}
+
+// ---- Main render ----
+function doRender() {
+  const raw = jsonInput.value.trim();
+  if (!raw) {
+    while (canvas.firstChild) canvas.removeChild(canvas.firstChild);
+    sizeInfo.textContent = '--';
+    return;
+  }
+  try {
+    viewData = JSON.parse(raw);
+  } catch (e) {
+    while (canvas.firstChild) canvas.removeChild(canvas.firstChild);
+    const errEl = createEl('div', {className: 'error-msg'});
+    errEl.textContent = 'JSON Parse Error:\n' + e.message;
+    canvas.appendChild(errEl);
+    return;
+  }
+  const vp = viewData.props?.defaultSize || {width: 800, height: 600};
+  const w = vp.width || 800;
+  const h = vp.height || 600;
+  sizeInfo.textContent = w + ' x ' + h;
+
+  if (fitMode) {
+    const paneRect = previewPane.getBoundingClientRect();
+    const pw = paneRect.width - 40;
+    const ph = paneRect.height - 40;
+    const scale = Math.min(pw / w, ph / h, 1);
+    // Use scaled dimensions for the outer box, transform for content
+    canvas.style.width = Math.floor(w * scale) + 'px';
+    canvas.style.height = Math.floor(h * scale) + 'px';
+    canvas.style.overflow = 'hidden';
+    canvas.dataset.scale = scale;
+  } else {
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    canvas.style.overflow = 'visible';
+    canvas.dataset.scale = '1';
+  }
+
+  const root = viewData.root;
+  if (!root) {
+    while (canvas.firstChild) canvas.removeChild(canvas.firstChild);
+    const errEl = createEl('div', {className: 'error-msg'});
+    errEl.textContent = 'No "root" component found in JSON';
+    canvas.appendChild(errEl);
+    return;
+  }
+
+  // Reset uid counter
+  _uid = 0;
+
+  while (canvas.firstChild) canvas.removeChild(canvas.firstChild);
+  const rendered = renderComponent(root, null);
+  if (rendered) {
+    const scale = parseFloat(canvas.dataset.scale || '1');
+    if (scale < 1) {
+      // Wrap in a scaled container so content renders at full size but displays smaller
+      const wrapper = createEl('div');
+      wrapper.style.width = w + 'px';
+      wrapper.style.height = h + 'px';
+      wrapper.style.transform = 'scale(' + scale + ')';
+      wrapper.style.transformOrigin = 'top left';
+      wrapper.appendChild(rendered);
+      canvas.appendChild(wrapper);
+    } else {
+      canvas.appendChild(rendered);
+    }
+  }
+}
+
+// ---- UI controls ----
+$('#btnRender').addEventListener('click', doRender);
+$('#btnClear').addEventListener('click', function() {
+  jsonInput.value = '';
+  while (canvas.firstChild) canvas.removeChild(canvas.firstChild);
+  sizeInfo.textContent = '--';
+  viewData = null;
+});
+
+$('#btnOutlines').addEventListener('click', function() {
+  showOutlines = !showOutlines;
+  this.classList.toggle('active', showOutlines);
+  canvas.classList.toggle('show-outlines', showOutlines);
+});
+
+$('#btnDark').addEventListener('click', function() {
+  darkBg = !darkBg;
+  this.classList.toggle('active', darkBg);
+  canvas.classList.toggle('dark-bg', darkBg);
+});
+// Start with dark bg active
+$('#btnDark').classList.add('active');
+canvas.classList.add('dark-bg');
+
+$('#btnFit').addEventListener('click', function() {
+  fitMode = !fitMode;
+  this.classList.toggle('active', fitMode);
+  if (viewData) doRender();
+});
+
+// File input
+$('#fileInput').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    jsonInput.value = ev.target.result;
+    doRender();
+  };
+  reader.readAsText(file);
+});
+
+// Drag & drop
+jsonInput.addEventListener('dragover', function(e) { e.preventDefault(); jsonInput.classList.add('drag-over'); });
+jsonInput.addEventListener('dragleave', function() { jsonInput.classList.remove('drag-over'); });
+jsonInput.addEventListener('drop', function(e) {
+  e.preventDefault();
+  jsonInput.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = function(ev) { jsonInput.value = ev.target.result; doRender(); };
+    reader.readAsText(file);
+  }
+});
+
+// Keyboard shortcut: Ctrl/Cmd+Enter to render
+jsonInput.addEventListener('keydown', function(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); doRender(); }
+});
+
+// Resize handle for editor pane
+(function() {
+  const handle = $('#resizeHandle');
+  const editor = $('#editorPane');
+  let startX, startW;
+  function onMove(e) {
+    const w = Math.max(150, startW + (e.clientX - startX));
+    editor.style.width = w + 'px';
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    if (viewData && fitMode) doRender();
+  }
+  handle.addEventListener('mousedown', function(e) {
+    startX = e.clientX;
+    startW = editor.offsetWidth;
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    e.preventDefault();
+  });
+})();
+
+// URL parameter: ?file=path for automation (Playwright)
+(function() {
+  const params = new URLSearchParams(location.search);
+  const filePath = params.get('file');
+  if (filePath) {
+    fetch(filePath)
+      .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then(function(text) { jsonInput.value = text; doRender(); })
+      .catch(function(e) {
+        const errEl = createEl('div', {className: 'error-msg'});
+        errEl.textContent = 'Failed to load ' + filePath + ':\n' + e.message;
+        canvas.appendChild(errEl);
+      });
+  }
+})();
+
+})();
+</script>
+</body>
+</html>
