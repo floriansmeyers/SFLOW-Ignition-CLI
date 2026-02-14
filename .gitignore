@@ -25,3 +25,5 @@ credentials.json
 Thumbs.db
 /docs/scenarios
 /docs/screens
+instructions.csv
+config.json
