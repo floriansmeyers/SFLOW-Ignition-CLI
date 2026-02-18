@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Annotated
 
 import typer
@@ -22,7 +23,24 @@ app = typer.Typer(name="gateway", help="Gateway status, backups, modules, and lo
 console = Console()
 
 
-_STATUS_KEYS = ("state", "version", "edition", "deploymentMode")
+def _format_epoch_ms(ts: int | None) -> str:
+    """Convert epoch milliseconds to a human-readable timestamp string."""
+    if ts is None:
+        return ""
+    try:
+        dt = datetime.fromtimestamp(ts / 1000, tz=timezone.utc).astimezone()
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+    except (ValueError, OSError, OverflowError):
+        return str(ts)
+
+
+_STATUS_FIELDS = [
+    ("name", "name"),
+    ("version", "ignitionVersion"),
+    ("edition", "edition"),
+    ("deploymentMode", "deploymentMode"),
+    ("redundancyRole", "redundancyRole"),
+]
 
 
 @app.command()
@@ -33,10 +51,14 @@ def status(
     token: TokenOpt = None,
     fmt: FormatOpt = "table",
 ) -> None:
-    """Show concise gateway status (state, version, edition, mode)."""
+    """Show concise gateway status (name, version, edition, mode)."""
     with make_client(gateway, url, token) as client:
         data = client.get_json("/gateway-info")
-        summary = {k: data.get(k) for k in _STATUS_KEYS if data.get(k) is not None}
+        summary = {}
+        for label, key in _STATUS_FIELDS:
+            val = data.get(key)
+            if val is not None and val != "":
+                summary[label] = val
         output(summary or data, fmt, kv=True, title="Gateway Status")
 
 
@@ -170,9 +192,9 @@ def logs(
         columns = ["Timestamp", "Level", "Logger", "Message"]
         rows = [
             [
-                e.get("timestamp", ""),
+                _format_epoch_ms(e.get("timestamp")),
                 e.get("level", ""),
-                e.get("logger", ""),
+                e.get("loggerName", ""),
                 e.get("message", ""),
             ]
             for e in items

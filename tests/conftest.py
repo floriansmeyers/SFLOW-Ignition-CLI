@@ -48,24 +48,31 @@ def sample_profile() -> GatewayProfile:
 
 @pytest.fixture
 def mock_gateway_status() -> dict:
-    """Sample gateway status response."""
+    """Sample gateway status response (matches /gateway-info)."""
     return {
-        "state": "RUNNING",
+        "name": "Test Gateway",
+        "ignitionVersion": "8.3.0",
         "edition": "standard",
-        "version": "8.3.0",
+        "redundancyRole": "Independent",
+        "deploymentMode": "",
     }
 
 
 @pytest.fixture
 def mock_gateway_info() -> dict:
-    """Sample gateway info response."""
+    """Sample gateway info response (matches /gateway-info)."""
     return {
         "name": "Test Gateway",
-        "version": "8.3.0",
+        "ignitionVersion": "8.3.0",
         "edition": "standard",
-        "state": "RUNNING",
-        "platform_os": "Linux",
-        "java_version": "17.0.9",
+        "redundancyRole": "Independent",
+        "hostname": "localhost",
+        "port": "8043",
+        "deploymentMode": "",
+        "timeZone": "Eastern Standard Time",
+        "timeZoneId": "America/New_York",
+        "jvmVersion": "17.0.9",
+        "allowUnsignedModules": False,
     }
 
 

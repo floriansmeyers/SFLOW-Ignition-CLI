@@ -22,7 +22,8 @@ class TestGatewayCommands:
             "--url", "https://gw:8043", "--token", "k:s",
         ])
         assert result.exit_code == 0
-        assert "RUNNING" in result.output
+        assert "Test Gateway" in result.output
+        assert "8.3.0" in result.output
 
     @respx.mock
     def test_status_json(self, mock_gateway_status: dict):
@@ -35,7 +36,7 @@ class TestGatewayCommands:
             "-f", "json",
         ])
         assert result.exit_code == 0
-        assert "RUNNING" in result.output
+        assert "8.3.0" in result.output
 
     @respx.mock
     def test_info(self, mock_gateway_info: dict):
@@ -159,8 +160,8 @@ class TestGatewayLogs:
     def test_logs(self):
         respx.get("https://gw:8043/data/api/v1/logs").mock(
             return_value=httpx.Response(200, json=[
-                {"timestamp": "2024-01-01T00:00:00Z", "level": "INFO",
-                 "logger": "Gateway", "message": "Started"},
+                {"timestamp": 1704067200000, "level": "INFO",
+                 "loggerName": "Gateway", "message": "Started"},
             ])
         )
         result = runner.invoke(app, [
@@ -169,13 +170,14 @@ class TestGatewayLogs:
         ])
         assert result.exit_code == 0
         assert "Started" in result.output
+        assert "Gateway" in result.output
 
     @respx.mock
     def test_logs_with_level_filter(self):
         respx.get("https://gw:8043/data/api/v1/logs").mock(
             return_value=httpx.Response(200, json=[
-                {"timestamp": "2024-01-01T00:00:00Z", "level": "ERROR",
-                 "logger": "Gateway", "message": "Disk full"},
+                {"timestamp": 1704067200000, "level": "ERROR",
+                 "loggerName": "Gateway", "message": "Disk full"},
             ])
         )
         result = runner.invoke(app, [
