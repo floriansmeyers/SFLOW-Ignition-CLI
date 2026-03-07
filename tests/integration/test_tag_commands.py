@@ -81,6 +81,58 @@ class TestTagCommands:
         assert "T1" in result.output
 
     @respx.mock
+    def test_export_csv(self):
+        respx.get(f"{BASE}/tags/export").mock(
+            return_value=httpx.Response(200, json={
+                "tags": [
+                    {"name": "Folder1", "tagType": "Folder", "tags": [
+                        {"name": "Tag1", "tagType": "AtomicTag", "dataType": "Int4"},
+                    ]},
+                    {"name": "Tag2", "tagType": "AtomicTag", "dataType": "Float8",
+                     "value": 3.14, "tooltip": "A float tag"},
+                ],
+            })
+        )
+        result = runner.invoke(app, [
+            "tag", "export", "-f", "csv",
+            "--url", GW, "--token", "k:s",
+        ])
+        assert result.exit_code == 0
+        lines = [line for line in result.output.splitlines() if line.strip()]
+        assert lines[0] == "path,tagType,dataType,value,tooltip"
+        assert "Folder1,Folder" in lines[1]
+        assert "Folder1/Tag1,AtomicTag,Int4" in lines[2]
+        assert "Tag2,AtomicTag,Float8,3.14,A float tag" in lines[3]
+
+    @respx.mock
+    def test_export_csv_to_file(self, tmp_path):
+        respx.get(f"{BASE}/tags/export").mock(
+            return_value=httpx.Response(200, json={
+                "tags": [
+                    {"name": "Tag1", "tagType": "AtomicTag", "dataType": "Boolean"},
+                ],
+            })
+        )
+        out = str(tmp_path / "tags.csv")
+        result = runner.invoke(app, [
+            "tag", "export", "-f", "csv", "-o", out,
+            "--url", GW, "--token", "k:s",
+        ])
+        assert result.exit_code == 0
+        assert "exported" in result.output
+        content = (tmp_path / "tags.csv").read_text()
+        assert "path,tagType,dataType,value,tooltip" in content
+        assert "Tag1,AtomicTag,Boolean" in content
+
+    def test_export_invalid_format(self):
+        result = runner.invoke(app, [
+            "tag", "export", "-f", "xml",
+            "--url", GW, "--token", "k:s",
+        ])
+        assert result.exit_code == 1
+        assert "Invalid format" in result.output
+
+    @respx.mock
     def test_export_to_file(self, tmp_path):
         respx.get(f"{BASE}/tags/export").mock(
             return_value=httpx.Response(200, json={"tags": [{"name": "T1"}]})

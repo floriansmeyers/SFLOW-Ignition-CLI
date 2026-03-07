@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 from pathlib import Path
 from typing import Annotated, Any
@@ -23,6 +25,31 @@ from ignition_cli.output.formatter import output
 
 app = typer.Typer(name="tag", help="Browse, read, write, and manage tags.")
 console = Console()
+
+
+_CSV_COLUMNS = ["path", "tagType", "dataType", "value", "tooltip"]
+
+
+def _flatten_tags(
+    node_data: dict[str, Any] | list[Any],
+    parent_path: str = "",
+) -> list[dict[str, Any]]:
+    """Recursively flatten tag tree into a list of dicts with full ``path``."""
+    result = []
+    items = extract_items(node_data, "tags")
+    for item in items:
+        name = item.get("name", "")
+        full_path = f"{parent_path}/{name}" if parent_path else name
+        result.append({
+            "path": full_path,
+            "tagType": item.get("tagType", item.get("tag_type", "")),
+            "dataType": item.get("dataType", item.get("data_type", "")),
+            "value": item.get("value", ""),
+            "tooltip": item.get("tooltip", ""),
+        })
+        if "tags" in item:
+            result.extend(_flatten_tags(item["tags"], full_path))
+    return result
 
 
 def _build_tree(
@@ -195,23 +222,46 @@ def export_tags(
         typer.Option("--output", "-o", help="Output file"),
     ] = None,
     provider: Annotated[str, typer.Option("--provider", "-p")] = "default",
+    fmt: Annotated[
+        str,
+        typer.Option("--format", "-f", help="Export format: json or csv"),
+    ] = "json",
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
 ) -> None:
-    """Export tag configuration as JSON."""
+    """Export tag configuration as JSON or CSV."""
+    fmt = fmt.lower()
+    if fmt not in {"json", "csv"}:
+        console.print(f"[red]Invalid format '{fmt}'. Use 'json' or 'csv'.[/]")
+        raise typer.Exit(1)
     with make_client(gateway, url, token) as client:
         params: dict[str, str] = {"provider": provider, "type": "json"}
         if path:
             params["path"] = path
-        api_path = "/tags/export"
-        data = client.get_json(api_path, params=params)
+        data = client.get_json("/tags/export", params=params)
 
-        if output_file:
-            Path(output_file).write_text(json.dumps(data, indent=2))
-            console.print(f"[green]Tags exported to {output_file}[/]")
+        if fmt == "csv":
+            rows = _flatten_tags(data)
+            csv_rows = [[row.get(c, "") for c in _CSV_COLUMNS] for row in rows]
+            if output_file:
+                with Path(output_file).open("w", newline="") as fh:
+                    writer = csv.writer(fh)
+                    writer.writerow(_CSV_COLUMNS)
+                    writer.writerows(csv_rows)
+                console.print(f"[green]Tags exported to {output_file}[/]")
+            else:
+                buf = io.StringIO()
+                writer = csv.writer(buf)
+                writer.writerow(_CSV_COLUMNS)
+                writer.writerows(csv_rows)
+                console.print(buf.getvalue(), end="")
         else:
-            console.print_json(json.dumps(data, indent=2))
+            if output_file:
+                Path(output_file).write_text(json.dumps(data, indent=2))
+                console.print(f"[green]Tags exported to {output_file}[/]")
+            else:
+                console.print_json(json.dumps(data, indent=2))
 
 
 @app.command("import")
