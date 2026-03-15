@@ -562,7 +562,8 @@ class TestTagReadWriteWebDev:
             *gw_opts,
         ])
         assert result.exit_code == 1
-        assert "not found" in result.output.lower() or "not reachable" in result.output.lower()
+        out = result.output.lower()
+        assert "not found" in out or "not reachable" in out
 
 
 # ===================================================================
