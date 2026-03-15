@@ -6,6 +6,9 @@ Skipped by default unless gateway credentials are provided.
 Run with:
     pytest -m e2e --gateway-url=http://host:8088 --gateway-token=keyId:secretKey
 
+For tag read/write tests via WebDev, also pass:
+    --webdev-project=mcp-connector
+
 WARNING: These tests create and delete real resources on the gateway.
          Use a development/test gateway, never production.
 """
@@ -469,6 +472,97 @@ class TestTagReadWrite:
         if result.exit_code == 1:
             out = result.output.lower()
             assert "not found" in out or "not a standard" in out
+
+
+@pytest.mark.e2e
+class TestTagReadWriteWebDev:
+    """tag read / tag write via WebDev connector (--webdev-project).
+
+    Requires the SFLOW MCP Connector installed on the gateway.
+    Run with: pytest -m e2e --gateway-url=URL --gateway-token=TOKEN \
+              --webdev-project=mcp-connector
+    """
+
+    def test_read_single_tag(self, gw_opts, webdev_project):
+        """Read a single tag value via WebDev."""
+        result = invoke(
+            ["tag", "read", "[default]Now",
+             "--webdev-project", webdev_project],
+            gw_opts,
+        )
+        assert "Now" in result.output
+        assert "Good" in result.output
+
+    def test_read_multiple_tags(self, gw_opts, webdev_project):
+        """Read multiple tags in a single call."""
+        result = invoke(
+            ["tag", "read", "[default]Now", "[default]Navigation",
+             "--webdev-project", webdev_project],
+            gw_opts,
+        )
+        assert "Now" in result.output
+        assert "Navigation" in result.output
+
+    def test_read_json_format(self, gw_opts, webdev_project):
+        """Read tag and output as JSON."""
+        result = invoke(
+            ["tag", "read", "[default]Now",
+             "--webdev-project", webdev_project,
+             "--format", "json"],
+            gw_opts,
+        )
+        data = json.loads(result.output)
+        assert isinstance(data, list)
+        assert len(data) >= 1
+        assert "path" in data[0]
+        assert "value" in data[0]
+
+    def test_write_and_read_roundtrip(self, gw_opts, webdev_project):
+        """Write a value and read it back."""
+        result = invoke(
+            ["tag", "write", "[default]Navigation", "e2e-test-value",
+             "--webdev-project", webdev_project],
+            gw_opts,
+        )
+        assert "wrote" in result.output.lower()
+        assert "e2e-test-value" in result.output
+
+        result = invoke(
+            ["tag", "read", "[default]Navigation",
+             "--webdev-project", webdev_project],
+            gw_opts,
+        )
+        assert "e2e-test-value" in result.output
+
+    def test_write_numeric_value(self, gw_opts, webdev_project):
+        """Write a numeric value (should be parsed as number, not string)."""
+        result = invoke(
+            ["tag", "write", "[default]Now", "42",
+             "--webdev-project", webdev_project],
+            gw_opts,
+        )
+        assert "wrote" in result.output.lower()
+        assert "42" in result.output
+
+    def test_read_nonexistent_tag(self, gw_opts, webdev_project):
+        """Reading a nonexistent tag should return Bad quality."""
+        result = invoke(
+            ["tag", "read", "[default]Does/Not/Exist/e2e-test",
+             "--webdev-project", webdev_project],
+            gw_opts,
+        )
+        out = result.output.lower()
+        assert "bad" in out or "not_found" in out or "notfound" in out
+
+    def test_read_invalid_project(self, gw_opts):
+        """Reading with a wrong --webdev-project should fail gracefully."""
+        result = runner.invoke(app, [
+            "tag", "read", "[default]Now",
+            "--webdev-project", "nonexistent-project-e2e",
+            *gw_opts,
+        ])
+        assert result.exit_code == 1
+        assert "not found" in result.output.lower() or "not reachable" in result.output.lower()
 
 
 # ===================================================================

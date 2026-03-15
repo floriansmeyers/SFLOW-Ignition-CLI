@@ -50,8 +50,8 @@ dev = [
 ignition-cli = "ignition_cli.app:main"
 
 [project.urls]
-Homepage = "https://github.com/SFLOW-Ignition-CLI/ignition-cli"
-Repository = "https://github.com/SFLOW-Ignition-CLI/ignition-cli"
+Homepage = "https://github.com/floriansmeyers/SFLOW-Ignition-CLI"
+Repository = "https://github.com/floriansmeyers/SFLOW-Ignition-CLI"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ignition_cli"]

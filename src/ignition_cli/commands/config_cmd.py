@@ -61,6 +61,10 @@ def add(
         str | None,
         typer.Option("--password", help="Basic auth password"),
     ] = None,
+    webdev_project: Annotated[
+        str | None,
+        typer.Option("--webdev-project", help="WebDev project for tag read/write"),
+    ] = None,
     no_verify_ssl: Annotated[
         bool,
         typer.Option("--no-verify-ssl", help="Disable SSL verification"),
@@ -78,6 +82,7 @@ def add(
         token=token,
         username=username,
         password=password,
+        webdev_project=webdev_project,
         verify_ssl=not no_verify_ssl,
     )
     mgr.add_profile(profile)

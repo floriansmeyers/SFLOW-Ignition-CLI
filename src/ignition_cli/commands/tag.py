@@ -10,7 +10,7 @@ import typer
 from rich.console import Console
 from rich.tree import Tree
 
-from ignition_cli.client.errors import NotFoundError, error_handler
+from ignition_cli.client.errors import GatewayAPIError, NotFoundError, error_handler
 from ignition_cli.commands._common import (
     FormatOpt,
     GatewayOpt,
@@ -20,6 +20,14 @@ from ignition_cli.commands._common import (
     make_client,
 )
 from ignition_cli.output.formatter import output
+
+WebdevProjectOpt = Annotated[
+    str | None,
+    typer.Option(
+        "--webdev-project",
+        help="WebDev project for tag read/write (overrides profile)",
+    ),
+]
 
 app = typer.Typer(name="tag", help="Browse, read, write, and manage tags.")
 console = Console()
@@ -89,6 +97,7 @@ def browse(
 def read(
     paths: Annotated[list[str], typer.Argument(help="Tag paths to read")],
     provider: Annotated[str, typer.Option("--provider", "-p")] = "default",
+    webdev_project: WebdevProjectOpt = None,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -99,27 +108,51 @@ def read(
     Note: Tag reading is not part of the standard Ignition
     REST API. This requires a gateway with a WebDev endpoint
     or custom module providing this capability.
+
+    Use --webdev-project or set webdev_project in your profile
+    to route through the included SFLOW MCP Connector.
     """
-    console.print(
-        "[yellow]Warning: /tags/read is not a standard"
-        " Ignition REST API endpoint. This requires a"
-        " WebDev module or custom endpoint.[/]"
-    )
     with make_client(gateway, url, token) as client:
-        try:
-            resp = client.post("/tags/read", json=paths, params={"provider": provider})
-        except NotFoundError:
+        project = webdev_project or client.profile.webdev_project
+        if project:
+            try:
+                resp = client.get(
+                    f"{client.profile.url}/system/webdev/{project}/tags/read",
+                    params={"paths": ",".join(paths)},
+                )
+            except (NotFoundError, GatewayAPIError):
+                console.print(
+                    f"[red]WebDev project '{project}' not found or not"
+                    " reachable. Ensure the SFLOW MCP Connector is"
+                    " installed and the project name is correct.[/]"
+                )
+                raise typer.Exit(1) from None
+            data = resp.json()
+            items = extract_items(data, "tags")
+        else:
             console.print(
-                "[red]Endpoint /tags/read not found."
-                " This gateway does not support tag"
-                " reading via the REST API. Install"
-                " the WebDev module or configure a"
-                " custom endpoint.[/]"
+                "[yellow]Warning: /tags/read is not a standard"
+                " Ignition REST API endpoint. This requires a"
+                " WebDev module or custom endpoint."
+                " Use --webdev-project to route through the"
+                " SFLOW MCP Connector.[/]"
             )
-            raise typer.Exit(1) from None
-        items = resp.json()
-        if not isinstance(items, list):
-            items = extract_items(items, "values")
+            try:
+                resp = client.post(
+                    "/tags/read", json=paths, params={"provider": provider},
+                )
+            except NotFoundError:
+                console.print(
+                    "[red]Endpoint /tags/read not found."
+                    " This gateway does not support tag"
+                    " reading via the REST API. Install"
+                    " the SFLOW MCP Connector (see contrib/)"
+                    " or configure --webdev-project.[/]"
+                )
+                raise typer.Exit(1) from None
+            items = resp.json()
+            if not isinstance(items, list):
+                items = extract_items(items, "values")
 
         if fmt != "table":
             output(items, fmt)
@@ -143,6 +176,7 @@ def write(
     path: Annotated[str, typer.Argument(help="Tag path")],
     value: Annotated[str, typer.Argument(help="Value to write")],
     provider: Annotated[str, typer.Option("--provider", "-p")] = "default",
+    webdev_project: WebdevProjectOpt = None,
     gateway: GatewayOpt = None,
     url: UrlOpt = None,
     token: TokenOpt = None,
@@ -152,12 +186,10 @@ def write(
     Note: Tag writing is not part of the standard Ignition
     REST API. This requires a gateway with a WebDev endpoint
     or custom module providing this capability.
+
+    Use --webdev-project or set webdev_project in your profile
+    to route through the included SFLOW MCP Connector.
     """
-    console.print(
-        "[yellow]Warning: /tags/write is not a standard"
-        " Ignition REST API endpoint. This requires a"
-        " WebDev module or custom endpoint.[/]"
-    )
     # Try to parse as JSON for numeric/boolean values
     try:
         parsed = json.loads(value)
@@ -165,22 +197,47 @@ def write(
         parsed = value
 
     with make_client(gateway, url, token) as client:
-        try:
-            client.post(
-                "/tags/write",
-                json=[{"path": path, "value": parsed}],
-                params={"provider": provider},
-            )
-        except NotFoundError:
+        project = webdev_project or client.profile.webdev_project
+        if project:
+            try:
+                resp = client.post(
+                    f"{client.profile.url}/system/webdev/{project}/tags/write",
+                    json={"path": path, "value": parsed},
+                )
+            except (NotFoundError, GatewayAPIError):
+                console.print(
+                    f"[red]WebDev project '{project}' not found or not"
+                    " reachable. Ensure the SFLOW MCP Connector is"
+                    " installed and the project name is correct.[/]"
+                )
+                raise typer.Exit(1) from None
+            result = resp.json()
+            quality = result.get("quality", "")
+            console.print(f"[green]Wrote {parsed!r} to {path}[/] (quality: {quality})")
+        else:
             console.print(
-                "[red]Endpoint /tags/write not found."
-                " This gateway does not support tag"
-                " writing via the REST API. Install"
-                " the WebDev module or configure a"
-                " custom endpoint.[/]"
+                "[yellow]Warning: /tags/write is not a standard"
+                " Ignition REST API endpoint. This requires a"
+                " WebDev module or custom endpoint."
+                " Use --webdev-project to route through the"
+                " SFLOW MCP Connector.[/]"
             )
-            raise typer.Exit(1) from None
-        console.print(f"[green]Wrote {parsed!r} to {path}[/]")
+            try:
+                client.post(
+                    "/tags/write",
+                    json=[{"path": path, "value": parsed}],
+                    params={"provider": provider},
+                )
+            except NotFoundError:
+                console.print(
+                    "[red]Endpoint /tags/write not found."
+                    " This gateway does not support tag"
+                    " writing via the REST API. Install"
+                    " the SFLOW MCP Connector (see contrib/)"
+                    " or configure --webdev-project.[/]"
+                )
+                raise typer.Exit(1) from None
+            console.print(f"[green]Wrote {parsed!r} to {path}[/]")
 
 
 @app.command("export")

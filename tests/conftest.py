@@ -13,6 +13,7 @@ from ignition_cli.config.models import GatewayProfile
 def pytest_addoption(parser):
     parser.addoption("--gateway-url", action="store", default=None)
     parser.addoption("--gateway-token", action="store", default=None)
+    parser.addoption("--webdev-project", action="store", default=None)
 
 
 @pytest.fixture
@@ -22,6 +23,14 @@ def gw_opts(request):
     if not url or not token:
         pytest.skip("Live gateway credentials not provided")
     return ["--url", url, "--token", token]
+
+
+@pytest.fixture
+def webdev_project(request):
+    project = request.config.getoption("--webdev-project")
+    if not project:
+        pytest.skip("--webdev-project not provided")
+    return project
 
 
 @pytest.fixture

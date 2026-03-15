@@ -19,6 +19,9 @@ class GatewayProfile(BaseModel):
     timeout: float = Field(
         default=30.0, gt=0, le=600, description="Request timeout in seconds",
     )
+    webdev_project: str | None = Field(
+        default=None, description="WebDev project for tag read/write",
+    )
 
     @field_validator("url")
     @classmethod

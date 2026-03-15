@@ -108,6 +108,82 @@ class TestTagCommands:
         assert "imported" in result.output
 
     @respx.mock
+    def test_read_webdev(self):
+        respx.get(f"{GW}/system/webdev/mcp_connector/tags/read").mock(
+            return_value=httpx.Response(200, json={
+                "tags": [
+                    {"path": "Tag1", "value": 42,
+                     "quality": "Good",
+                     "timestamp": "2024-01-01T00:00:00Z"},
+                ],
+            })
+        )
+        result = runner.invoke(app, [
+            "tag", "read", "Tag1",
+            "--webdev-project", "mcp_connector",
+            "--url", GW, "--token", "k:s",
+        ])
+        assert result.exit_code == 0
+        assert "42" in result.output
+        assert "Warning" not in result.output
+
+    @respx.mock
+    def test_write_webdev(self):
+        respx.post(f"{GW}/system/webdev/mcp_connector/tags/write").mock(
+            return_value=httpx.Response(200, json={
+                "quality": "Good",
+            })
+        )
+        result = runner.invoke(app, [
+            "tag", "write", "Tag1", "100",
+            "--webdev-project", "mcp_connector",
+            "--url", GW, "--token", "k:s",
+        ])
+        assert result.exit_code == 0
+        assert "Wrote" in result.output
+        assert "quality: Good" in result.output
+        assert "Warning" not in result.output
+
+    @respx.mock
+    def test_read_webdev_from_profile(self, tmp_path):
+        """Profile webdev_project is used when --webdev-project is not passed."""
+        from unittest.mock import patch
+
+        import tomli_w
+
+        cfg = tmp_path / "config.toml"
+        cfg.write_text(tomli_w.dumps({
+            "default_profile": "dev",
+            "profiles": {
+                "dev": {
+                    "url": GW,
+                    "token": "k:s",
+                    "webdev_project": "mcp_connector",
+                },
+            },
+        }))
+        respx.get(f"{GW}/system/webdev/mcp_connector/tags/read").mock(
+            return_value=httpx.Response(200, json={
+                "tags": [
+                    {"path": "Sensor1", "value": 99.5,
+                     "quality": "Good",
+                     "timestamp": "2024-06-15T12:00:00Z"},
+                ],
+            })
+        )
+
+        with patch("ignition_cli.commands._common.ConfigManager") as MockCM:
+            from ignition_cli.config.manager import ConfigManager as RealCM
+            MockCM.return_value = RealCM(config_path=cfg)
+            result = runner.invoke(app, [
+                "tag", "read", "Sensor1",
+                "--gateway", "dev",
+            ])
+        assert result.exit_code == 0
+        assert "99.5" in result.output
+        assert "Warning" not in result.output
+
+    @respx.mock
     def test_providers(self):
         respx.get(f"{BASE}/resources/list/ignition/tag-provider").mock(
             return_value=httpx.Response(200, json=[

@@ -80,8 +80,8 @@ pip install "ignition-cli[watch]"
 ### From source
 
 ```bash
-git clone https://github.com/SFLOW-Ignition-CLI/ignition-cli.git
-cd ignition-cli
+git clone https://github.com/floriansmeyers/SFLOW-Ignition-CLI.git
+cd SFLOW-Ignition-CLI
 pip install -e ".[dev]"
 ```
 
@@ -89,7 +89,7 @@ pip install -e ".[dev]"
 
 ```bash
 ignition-cli --version
-# ignition-cli 0.1.0
+# ignition-cli 0.3.0
 ```
 
 ---
@@ -3349,11 +3349,23 @@ Use `ignition-cli resource types` to discover available resource types.
 
 #### Tag read/write not available
 
-Tag `read` and `write` commands are not part of the standard Ignition REST API. They require a custom WebDev endpoint or third-party module on the gateway.
+Tag `read` and `write` commands are not part of the standard Ignition REST API. They require a WebDev endpoint on the gateway.
 
-If you get 404 errors on tag read/write:
-- Ensure the gateway has a WebDev module with endpoints for tag operations
-- Verify the endpoint paths match what the CLI expects (`/tags/read`, `/tags/write`)
+**Recommended setup:** Install the included SFLOW MCP Connector (`contrib/mcp-connector.zip`) on your gateway — it provides the WebDev endpoints the CLI expects. See `contrib/README.md` for installation instructions. Then configure your profile:
+
+```bash
+ignition-cli config add dev --url https://gateway:8043 --token "keyId:secretKey" --webdev-project mcp-connector
+```
+
+Or pass `--webdev-project` directly:
+
+```bash
+ignition-cli tag read "[default]HMI/Temperature" --webdev-project mcp-connector
+```
+
+If you get 404 errors on tag read/write without `--webdev-project`:
+- Install the SFLOW MCP Connector from `contrib/mcp-connector.zip`
+- Or ensure the gateway has a custom WebDev module with endpoints at `/tags/read` and `/tags/write`
 
 ### Debugging Tips
 

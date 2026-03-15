@@ -5,11 +5,11 @@ CLI tool for the Ignition SCADA 8.3+ REST API. Built with Typer, httpx, and Pyda
 ## Quick Start
 
 ```bash
-# Install
-pip install -e ".[dev]"
+# Install from PyPI
+pip install ignition-cli
 
-# Configure a gateway connection
-ignition-cli config add dev --url https://gateway:8043 --token "keyId:secretKey"
+# Configure a gateway connection (--webdev-project enables tag read/write)
+ignition-cli config add dev --url https://gateway:8043 --token "keyId:secretKey" --webdev-project mcp-connector
 
 # Test the connection
 ignition-cli config test
@@ -32,7 +32,7 @@ ignition-cli gateway status
 | `mode` | Deployment modes | `list`, `show`, `create`, `update`, `delete`, `assign`, `unassign` |
 | `api` | Raw API access | `get`, `post`, `put`, `delete`, `discover`, `spec` |
 
-\* Tag `read` and `write` are non-standard endpoints requiring a WebDev module or custom gateway extension.
+\* Tag `read` and `write` require the included SFLOW MCP Connector or a custom WebDev endpoint. Use `--webdev-project` to configure.
 
 ## Output Formats
 
@@ -48,6 +48,27 @@ ignition-cli gateway status -f yaml
 - **API Token** (recommended): `--token "keyId:secretKey"` (sent as `X-Ignition-API-Token` header)
 - **HTTP Basic Auth**: `--username admin --password secret`
 - **Environment variables**: `IGNITION_GATEWAY_URL`, `IGNITION_API_TOKEN`
+
+## Tag Read/Write Setup
+
+Tag `read` and `write` are not part of the standard Ignition REST API. They require a WebDev endpoint on the gateway.
+
+**Recommended:** Install the included SFLOW MCP Connector (`contrib/mcp-connector.zip`) on your gateway. See `contrib/README.md` for instructions.
+
+Then configure your profile with the WebDev project name:
+
+```bash
+ignition-cli config add dev --url https://gateway:8043 --token "keyId:secretKey" --webdev-project mcp-connector
+```
+
+Or pass it per-command:
+
+```bash
+ignition-cli tag read "[default]HMI/Temperature" --webdev-project mcp-connector
+ignition-cli tag write "[default]HMI/Setpoint" 75.0 --webdev-project mcp-connector
+```
+
+Without `--webdev-project`, the CLI falls back to a direct `/tags/read` endpoint (non-standard, requires a custom module).
 
 ## Tools
 
@@ -75,6 +96,15 @@ Run `ignition-cli --help` for full usage information. See [docs/usage.md](docs/u
 | 2 | [Tag Diff Across Gateways](docs/scenarios/02-tag-diff-across-gateways.md) | 6 | [Upgrade Verification](docs/scenarios/06-upgrade-verification.md) |
 | 3 | [Resource Inventory Export](docs/scenarios/03-resource-inventory-export.md) | 7 | [Compliance Audit Report](docs/scenarios/07-compliance-report/README.md) |
 | 4 | [Bulk Device Commissioning](docs/scenarios/04-bulk-device-commissioning.md) | 8 | [Environment Cloning](docs/scenarios/08-environment-cloning.md) |
+
+## Development
+
+```bash
+git clone https://github.com/floriansmeyers/SFLOW-Ignition-CLI.git
+cd SFLOW-Ignition-CLI
+pip install -e ".[dev]"
+pytest tests/
+```
 
 ## License
 

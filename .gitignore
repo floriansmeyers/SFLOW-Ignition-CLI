@@ -23,7 +23,11 @@ credentials.json
 # OS
 .DS_Store
 Thumbs.db
-/docs/scenarios
 /docs/screens
+tags-backup.json
+docs/scenarios/07-compliance-report/compliance-report-*.md
+docs/scenarios/07-compliance-report/audit-data/
 instructions.csv
 config.json
+tmp-default-format/
+tmp-review-config/
