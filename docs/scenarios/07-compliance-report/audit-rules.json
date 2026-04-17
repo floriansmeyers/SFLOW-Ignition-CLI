@@ -1,0 +1,8 @@
+{
+  "min_version": "8.3.2",
+  "required_modules": [
+    "com.inductiveautomation.opcua",
+    "com.inductiveautomation.perspective"
+  ],
+  "max_error_count": 25
+}
